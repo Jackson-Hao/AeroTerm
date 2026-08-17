@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<agent_configurations>
+    <agent id="claude-code">
+        <name>Claude Code CLI</name>
+        <category>AI Coding Assistant</category>
+        <command>claude</command>
+        <default_args>--dangerously-skip-permissions</default_args>
+        <description>Anthropic's official agentic command-line interface for autonomous coding, refactoring, and debugging.</description>
+        <icon>sparkles</icon>
+        <icon_file>claude.png</icon_file>
+        <tint_color>#D97706</tint_color>
+        <env_keys>
+            <env name="ANTHROPIC_API_KEY" required="false" placeholder="sk-ant-api03-..."/>
+            <env name="ANTHROPIC_BASE_URL" required="false" placeholder="https://api.anthropic.com"/>
+        </env_keys>
+    </agent>
+
+    <agent id="codex-cli">
+        <name>Codex CLI</name>
+        <category>OpenAI Agent</category>
+        <command>codex</command>
+        <default_args></default_args>
+        <description>OpenAI's advanced code reasoning and autonomous command-line developer environment.</description>
+        <icon>cpu.fill</icon>
+        <icon_file>codex.png</icon_file>
+        <tint_color>#10B981</tint_color>
+        <env_keys>
+            <env name="OPENAI_API_KEY" required="false" placeholder="sk-proj-..."/>
+            <env name="OPENAI_BASE_URL" required="false" placeholder="https://api.openai.com/v1"/>
+            <env name="OPENAI_MODEL" required="false" placeholder="gpt-4o"/>
+        </env_keys>
+    </agent>
+
+    <agent id="antigravity-cli">
+        <name>Antigravity CLI</name>
+        <category>Advanced Agentic Coding</category>
+        <command>agy</command>
+        <default_args></default_args>
+        <description>Google DeepMind's Advanced Agentic Coding CLI with concurrent subagent dispatch and skills engine.</description>
+        <icon>brain.head.profile</icon>
+        <icon_file>antigravity.png</icon_file>
+        <tint_color>#38BDF8</tint_color>
+        <env_keys>
+            <env name="GEMINI_API_KEY" required="false" placeholder="AIzaSy..."/>
+            <env name="ANTIGRAVITY_ENV" required="false" placeholder="production"/>
+        </env_keys>
+    </agent>
+
+    <agent id="grok-cli">
+        <name>Grok CLI</name>
+        <category>xAI Assistant</category>
+        <command>grok</command>
+        <default_args></default_args>
+        <description>xAI's real-time reasoning and unfiltered command-line intelligence agent.</description>
+        <icon>bolt.fill</icon>
+        <icon_file>grok.png</icon_file>
+        <tint_color>#64748B</tint_color>
+        <env_keys>
+            <env name="XAI_API_KEY" required="false" placeholder="xai-..."/>
+            <env name="XAI_BASE_URL" required="false" placeholder="https://api.x.ai/v1"/>
+        </env_keys>
+    </agent>
+
+    <agent id="hermes-cli">
+        <name>Hermes CLI</name>
+        <category>Nous Research</category>
+        <command>hermes</command>
+        <default_args></default_args>
+        <description>Nous Research's state-of-the-art open-weights reasoning agent with function calling and tool execution.</description>
+        <icon>flame.fill</icon>
+        <icon_file>hermes.png</icon_file>
+        <tint_color>#EC4899</tint_color>
+        <env_keys>
+            <env name="HERMES_API_KEY" required="false" placeholder="hermes-..."/>
+            <env name="HERMES_ENDPOINT" required="false" placeholder="http://localhost:8000/v1"/>
+        </env_keys>
+    </agent>
+
+    <agent id="custom-agent-cli">
+        <name>Custom Agent CLI</name>
+        <category>Custom Shell Tool</category>
+        <command>/bin/zsh</command>
+        <default_args>-l</default_args>
+        <description>Launch any custom AI agent binary, Python automation script or bespoke LLM terminal tool.</description>
+        <icon>terminal.fill</icon>
+        <icon_file>custom.png</icon_file>
+        <tint_color>#6366F1</tint_color>
+        <env_keys>
+            <env name="CUSTOM_AGENT_ENV" required="false" placeholder="value"/>
+        </env_keys>
+    </agent>
+</agent_configurations>

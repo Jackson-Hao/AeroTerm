@@ -1,0 +1,649 @@
+import SwiftUI
+import AppKit
+
+public struct NewConnectionWizardView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var sessionManager = SessionManager.shared
+    @ObservedObject var loc = LocalizationManager.shared
+    @ObservedObject var agentService = AgentCLIService.shared
+
+    @State private var currentStep: Int = 1
+    @State private var selectedCategory: SessionCategory = .agentCLI
+    @State private var selectedType: SessionType = .agentCLI
+    @State private var selectedAgentCLI: AgentCLIConfig? = nil
+
+    // Step 2 Form States
+    @State private var connectionName = ""
+    @State private var host = "127.0.0.1"
+    @State private var portString = "22"
+    @State private var username = ""
+    @State private var password = ""
+    @State private var saveToFavorites = true
+    @State private var isShowingCancelAlert = false
+
+    // Serial Specific
+    @State private var selectedSerialPort = ""
+    @State private var selectedBaudRate = 115200
+    @State private var availablePorts: [SerialPortInfo] = []
+
+    // Agent CLI Specific
+    @State private var agentCommand = "claude"
+    @State private var agentArgs = ""
+    @State private var agentWorkDir = "~"
+    @State private var agentEnvValues: [String: String] = [:]
+
+    // Hover States
+    @State private var hoveredType: SessionType? = nil
+    @State private var hoveredCategory: SessionCategory? = nil
+    @State private var hoveredAgentID: String? = nil
+
+    public init() {}
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            // 顶部向导进度条
+            wizardHeader
+                .padding(.horizontal, 24)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+
+            Divider()
+
+            // 核心向导内容 (840 x 600)
+            Group {
+                if currentStep == 1 {
+                    step1ProtocolSelection
+                } else {
+                    step2ConfigurationForm
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            // 底部操作栏
+            wizardFooter
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+                .background(.ultraThinMaterial)
+        }
+        .frame(width: 840, height: 600)
+        .background(Color(NSColor.windowBackgroundColor))
+        .alert(loc.text("confirm_exit_wizard"), isPresented: $isShowingCancelAlert) {
+            Button(loc.text("discard_and_exit"), role: .destructive) {
+                sessionManager.isShowingNewConnectionWizard = false
+                dismiss()
+            }
+            Button(loc.text("keep_editing"), role: .cancel) {}
+        } message: {
+            Text(loc.text("unsaved_wizard_msg"))
+        }
+        .onAppear {
+            if agentService.availableAgents.isEmpty {
+                agentService.loadConfigsFromXML()
+            }
+            if selectedAgentCLI == nil, let first = agentService.availableAgents.first {
+                selectAgent(first)
+            }
+        }
+    }
+
+    // MARK: - 顶部步骤指示器
+    private var wizardHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(loc.text("wizard_title"))
+                    .font(.system(size: 16, weight: .bold))
+                Text(currentStep == 1 ? loc.text("step_1_subtitle") : "\(loc.text("step_2_subtitle")) - \(selectedType == .agentCLI ? (selectedAgentCLI?.name ?? "Agent CLI") : selectedType.rawValue)")
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            HStack(spacing: 8) {
+                stepBadge(num: 1, title: loc.text("step_1_title"), isActive: currentStep == 1, isCompleted: currentStep > 1)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary.opacity(0.5))
+                stepBadge(num: 2, title: loc.text("step_2_title"), isActive: currentStep == 2, isCompleted: false)
+            }
+        }
+    }
+
+    private func stepBadge(num: Int, title: String, isActive: Bool, isCompleted: Bool) -> some View {
+        HStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(isActive ? Color.accentColor : (isCompleted ? Color.green : Color.secondary.opacity(0.2)))
+                    .frame(width: 20, height: 20)
+                if isCompleted {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                } else {
+                    Text("\(num)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(isActive ? .white : .secondary)
+                }
+            }
+
+            Text(title)
+                .font(.system(size: 11.5, weight: isActive ? .semibold : .regular))
+                .foregroundColor(isActive ? .primary : .secondary)
+        }
+    }
+
+    // MARK: - Step 1: 左右两栏分类选择
+    private var step1ProtocolSelection: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("CATEGORIES")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary.opacity(0.8))
+                    .padding(.horizontal, 14)
+                    .padding(.top, 14)
+                    .padding(.bottom, 4)
+
+                ForEach(SessionCategory.allCases) { category in
+                    categoryNavRow(category: category)
+                }
+
+                Spacer()
+            }
+            .frame(width: 240)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.45))
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if selectedCategory == .agentCLI {
+                        ForEach(agentService.availableAgents) { agent in
+                            agentCLICardRow(agent: agent)
+                        }
+                    } else {
+                        ForEach(selectedCategory.types) { type in
+                            protocolCardRow(type: type)
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func categoryNavRow(category: SessionCategory) -> some View {
+        let isSelected = selectedCategory == category
+        let isHovered = hoveredCategory == category
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selectedCategory = category
+                if category == .agentCLI {
+                    selectedType = .agentCLI
+                    if let first = agentService.availableAgents.first {
+                        selectAgent(first)
+                    }
+                } else if let first = category.types.first {
+                    selectedType = first
+                }
+            }
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: category.iconName)
+                    .font(.system(size: 13.5))
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .frame(width: 18)
+
+                Text(category.rawValue)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                Spacer(minLength: 4)
+
+                if isSelected {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected ? Color.accentColor.opacity(0.14) : (isHovered ? Color.secondary.opacity(0.08) : Color.clear))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredCategory = hovering ? category : nil
+        }
+        .padding(.horizontal, 8)
+    }
+
+    private func protocolCardRow(type: SessionType) -> some View {
+        let isSelected = selectedType == type
+        let isHovered = hoveredType == type
+
+        return Button {
+            selectedType = type
+            goToStep2()
+        } label: {
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(type.tintColor.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: type.iconName)
+                        .font(.system(size: 22))
+                        .foregroundColor(type.tintColor)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(type.rawValue)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+
+                        if type.defaultPort > 0 {
+                            Text("Port \(type.defaultPort)")
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1.5)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                    }
+
+                    Text(type.description)
+                        .font(.system(size: 11.5))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(isSelected || isHovered ? .accentColor : .secondary.opacity(0.3))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color.accentColor.opacity(0.12) : (isHovered ? Color.secondary.opacity(0.08) : Color(NSColor.controlBackgroundColor).opacity(0.6)))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.accentColor : (isHovered ? Color.secondary.opacity(0.3) : Color.secondary.opacity(0.12)), lineWidth: 1.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredType = hovering ? type : nil
+        }
+    }
+
+    private func agentCLICardRow(agent: AgentCLIConfig) -> some View {
+        let isSelected = selectedAgentCLI?.id == agent.id
+        let isHovered = hoveredAgentID == agent.id
+
+        return Button {
+            selectAgent(agent)
+            goToStep2()
+        } label: {
+            HStack(spacing: 16) {
+                AgentIconView(
+                    iconFile: agent.iconFile,
+                    fallbackSymbol: agent.icon,
+                    tintColor: agent.tintColor,
+                    size: 46
+                )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(agent.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+
+                        Text(agent.command)
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundColor(.purple)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(Color.purple.opacity(0.1))
+                            .cornerRadius(4)
+                    }
+
+                    Text(agent.description)
+                        .font(.system(size: 11.5))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(isSelected || isHovered ? .accentColor : .secondary.opacity(0.3))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color.accentColor.opacity(0.12) : (isHovered ? Color.secondary.opacity(0.08) : Color(NSColor.controlBackgroundColor).opacity(0.6)))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.accentColor : (isHovered ? Color.secondary.opacity(0.3) : Color.secondary.opacity(0.12)), lineWidth: 1.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredAgentID = hovering ? agent.id : nil
+        }
+    }
+
+    private func selectAgent(_ agent: AgentCLIConfig) {
+        selectedAgentCLI = agent
+        selectedType = .agentCLI
+        connectionName = agent.name
+        agentCommand = agent.command
+        agentArgs = agent.defaultArgs
+        agentWorkDir = "~"
+        agentEnvValues = [:]
+        for env in agent.envKeys {
+            agentEnvValues[env.name] = ""
+        }
+    }
+
+    private func goToStep2() {
+        if selectedType == .agentCLI {
+            if connectionName.isEmpty, let agent = selectedAgentCLI {
+                connectionName = agent.name
+            }
+        } else if selectedType == .serial {
+            availablePorts = SerialEngine.getAvailablePorts()
+            if let first = availablePorts.first {
+                selectedSerialPort = first.path
+            }
+            connectionName = "Serial - \(selectedSerialPort.replacingOccurrences(of: "/dev/cu.", with: ""))"
+        } else {
+            portString = "\(selectedType.defaultPort)"
+            connectionName = "\(selectedType.rawValue) - \(host)"
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            currentStep = 2
+        }
+    }
+
+    // MARK: - Step 2: 参数配置表单
+    private var step2ConfigurationForm: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(loc.text("connection_name_label"))
+                        .font(.system(size: 12, weight: .semibold))
+                    TextField("My Connection", text: $connectionName)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                if selectedType == .agentCLI {
+                    agentCLIFormSection
+                } else if selectedType == .serial {
+                    serialFormSection
+                } else {
+                    networkFormSection
+                }
+
+                Divider()
+
+                Toggle(loc.text("save_to_saved_connections"), isOn: $saveToFavorites)
+                    .font(.system(size: 12))
+            }
+            .padding(24)
+        }
+    }
+
+    private var agentCLIFormSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Binary Command / Executable")
+                    .font(.system(size: 12, weight: .semibold))
+                TextField("Command", text: $agentCommand)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Startup Arguments")
+                    .font(.system(size: 12, weight: .semibold))
+                TextField("Optional CLI arguments", text: $agentArgs)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Working Directory")
+                    .font(.system(size: 12, weight: .semibold))
+                HStack {
+                    TextField("Working Directory Path", text: $agentWorkDir)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Browse...") {
+                        browseDirectory()
+                    }
+                }
+            }
+
+            if let agent = selectedAgentCLI, !agent.envKeys.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Environment Variables (Configured from XML)")
+                        .font(.system(size: 12, weight: .semibold))
+
+                    ForEach(agent.envKeys) { env in
+                        HStack {
+                            Text(env.name)
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 180, alignment: .leading)
+                            TextField(env.placeholder.isEmpty ? "Value" : env.placeholder, text: Binding(
+                                get: { agentEnvValues[env.name] ?? "" },
+                                set: { agentEnvValues[env.name] = $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color.secondary.opacity(0.08))
+                .cornerRadius(8)
+            }
+        }
+    }
+
+    private var networkFormSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(loc.text("host_label"))
+                        .font(.system(size: 12, weight: .semibold))
+                    TextField("127.0.0.1", text: $host)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(loc.text("port_label"))
+                        .font(.system(size: 12, weight: .semibold))
+                    TextField("Port", text: $portString)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
+                }
+            }
+
+            if selectedType == .ssh || selectedType == .sftp || selectedType == .telnet || selectedType == .rdp {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(loc.text("username_label"))
+                            .font(.system(size: 12, weight: .semibold))
+                        TextField("Optional user", text: $username)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(loc.text("password_label"))
+                            .font(.system(size: 12, weight: .semibold))
+                        SecureField("Optional password", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+            }
+        }
+    }
+
+    private var serialFormSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(loc.text("serial_port_label"))
+                    .font(.system(size: 12, weight: .semibold))
+                if availablePorts.isEmpty {
+                    Text(loc.text("no_serial_port_detected"))
+                        .font(.system(size: 12))
+                        .foregroundColor(.red)
+                } else {
+                    Picker("", selection: $selectedSerialPort) {
+                        ForEach(availablePorts, id: \.path) { port in
+                            Text("\(port.name) (\(port.path))").tag(port.path)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(loc.text("baud_rate_label"))
+                    .font(.system(size: 12, weight: .semibold))
+                Picker("", selection: $selectedBaudRate) {
+                    ForEach([9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600], id: \.self) { rate in
+                        Text("\(rate)").tag(rate)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 160)
+            }
+        }
+    }
+
+    private func browseDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            agentWorkDir = url.path
+        }
+    }
+
+    // MARK: - 底部操作栏
+    private var wizardFooter: some View {
+        HStack {
+            Button(role: .destructive) {
+                isShowingCancelAlert = true
+            } label: {
+                Text(loc.text("cancel"))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background(Color.red.opacity(0.85))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if currentStep > 1 {
+                Button(loc.text("back")) {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        currentStep -= 1
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Button(currentStep == 1 ? loc.text("next") : loc.text("connect_btn")) {
+                if currentStep == 1 {
+                    goToStep2()
+                } else {
+                    handleConnect()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+        }
+    }
+
+    private func handleConnect() {
+        let portInt = Int(portString) ?? selectedType.defaultPort
+
+        if selectedType == .agentCLI {
+            let displayTitle = connectionName.isEmpty ? (selectedAgentCLI?.name ?? "Agent CLI") : connectionName
+            let session = SessionItem(
+                title: displayTitle,
+                subtitle: "\(agentCommand) \(agentArgs)",
+                type: .agentCLI,
+                isConnected: true,
+                host: agentCommand,
+                port: 0,
+                targetDevice: agentWorkDir,
+                customCommand: agentArgs,
+                workingDirectory: agentWorkDir,
+                environmentVariables: agentEnvValues
+            )
+
+            if saveToFavorites {
+                let config = ConnectionConfig(
+                    name: displayTitle,
+                    type: .agentCLI,
+                    host: agentCommand,
+                    port: 0,
+                    username: "",
+                    customArgs: agentArgs,
+                    workingDirectory: agentWorkDir,
+                    envVars: agentEnvValues
+                )
+                sessionManager.saveConnection(config, connectImmediately: false)
+            }
+
+            sessionManager.sessions.append(session)
+            sessionManager.activeSessionID = session.id
+            sessionManager.sidebarTab = .active
+            sessionManager.addRecent(RecentConnection(title: displayTitle, type: .agentCLI, host: agentCommand, port: 0))
+
+            sessionManager.isShowingNewConnectionWizard = false
+            dismiss()
+            return
+        }
+
+        let config = ConnectionConfig(
+            name: connectionName.isEmpty ? "\(selectedType.rawValue) - \(host)" : connectionName,
+            type: selectedType,
+            host: selectedType == .serial ? selectedSerialPort : host,
+            port: selectedType == .serial ? selectedBaudRate : portInt,
+            username: username
+        )
+
+        if saveToFavorites {
+            sessionManager.saveConnection(config, connectImmediately: true)
+        } else {
+            sessionManager.openFromConfig(config)
+        }
+
+        sessionManager.isShowingNewConnectionWizard = false
+        dismiss()
+    }
+}

@@ -1,0 +1,144 @@
+/* AeroTerm Standard English (US) Strings */
+
+/* Branding & Welcome */
+"app_title" = "AeroTerm";
+"app_version" = "v1.0";
+"app_subtitle" = "Lightweight Native SSH & Network Operations Workbench";
+"new_connection_btn" = "New Connection (Wizard)";
+"recent_connections" = "Recent Connections";
+"clear_history" = "Clear History";
+"filter_recents" = "Filter recent connections...";
+"no_recent_history" = "No recent connection history";
+"no_matching_connections" = "No matching connections found";
+"welcome_home" = "Home";
+
+/* Sidebar */
+"new_connection" = "New Connection";
+"saved_tab" = "Saved";
+"active_tab" = "Active";
+"no_saved_connections" = "No saved connections";
+"create_connection_now" = "Create Connection";
+"no_active_sessions" = "No running connections";
+"launch_from_saved" = "Launch from Saved";
+"ready" = "Ready";
+"running_count" = "running";
+"start_connection" = "Connect";
+"delete_config" = "Delete Config";
+"close_session" = "Close Session";
+
+/* Feature in Development Notice */
+"feature_in_development_title" = "Feature in Development";
+"feature_in_development_msg" = "The selected protocol engine is actively in development for the upcoming Phase 2 release. Please stay tuned!";
+"ok" = "OK";
+"alert_title" = "Notice";
+"no_serial_port_detected" = "No available serial port detected (/dev/cu.*)\nPlease plug in a USB serial adapter.";
+"serial_open_failed" = "Failed to open serial port:";
+
+/* Wizard General & Steps */
+"wizard_title" = "New Connection Wizard";
+"step_1_title" = "Protocol Selection";
+"step_2_title" = "Connection Setup";
+"step_3_title" = "Advanced Options";
+"step_4_title" = "Overview & Finish";
+"step_1_subtitle" = "Select a remote connection, debugging tool, remote desktop or AI agent";
+"step_2_subtitle" = "Configure Target and Credentials";
+
+"cancel" = "Cancel";
+"back" = "Back";
+"next" = "Next";
+"connect_btn" = "Connect";
+"btn_prev" = "Back";
+"btn_next" = "Next";
+"btn_finish" = "Finish & Save";
+"btn_cancel" = "Cancel";
+
+/* Form Labels */
+"connection_name_label" = "Connection Name";
+"conn_name_label" = "Connection Name";
+"host_label" = "Host / IP Address";
+"host_ip_label" = "Host / IP Address";
+"port_label" = "Port";
+"username_label" = "Username (Optional)";
+"password_label" = "Password (Optional)";
+"serial_port_label" = "Serial Port Device";
+"baud_rate_label" = "Baud Rate";
+"save_to_saved_connections" = "Save to Saved Connections";
+"group_label" = "Group Label";
+"default_group" = "Default Group";
+"serial_device_path" = "Serial Device Path";
+"tcp_keepalive_toggle" = "Enable TCP Keepalive Heartbeat";
+"x11_forwarding_toggle" = "Enable X11 Graphics Forwarding (-X)";
+"auto_connect_launch_toggle" = "Auto-connect on AeroTerm launch";
+
+"protocol_type" = "Protocol:";
+"connection_name" = "Name:";
+"target_address" = "Target:";
+"username" = "Username:";
+"connect_immediately" = "Connect immediately after saving";
+"in_dev_badge" = "In Dev";
+"node_suffix" = "Node";
+
+/* Protocol & Tool Descriptions */
+"ssh_desc" = "Secure Shell terminal session for remote Linux, macOS and UNIX server administration.";
+"sftp_desc" = "SSH File Transfer Protocol for secure remote file management and synchronization.";
+"telnet_desc" = "Plain text network communication protocol for legacy servers and network switch debugging.";
+"tcp_client_desc" = "Connect to remote TCP sockets with real-time bidirectional stream monitor and HEX view.";
+"tcp_server_desc" = "Listen on local port for multiple client connections with broadcasting capabilities.";
+"udp_tool_desc" = "Unicast, multicast, and broadcast packet generator and listener with HEX inspector.";
+"serial_desc" = "Direct serial port communication for hardware debugging (RS-232, RS-485, USB-to-UART).";
+"http_client_desc" = "REST API debugging workbench with method selection, JSON payload, and response viewer.";
+"vnc_desc" = "Virtual Network Computing graphical remote desktop access with clipboard sync.";
+"rdp_desc" = "Remote Desktop Protocol client for full Windows Server and desktop administration.";
+
+/* Tools: TCP / UDP / Serial / Telnet */
+"tcp_ready_waiting" = "TCP session ready, waiting for data transmission...";
+"udp_ready_waiting" = "UDP listener started, waiting for datagrams...";
+"serial_ready_waiting" = "Serial port connected, monitoring data stream...";
+"telnet_connecting" = "Connecting to";
+"telnet_connected" = "Connected to";
+"send_btn" = "Send";
+"hex_mode" = "HEX";
+"enter_tcp_payload" = "Enter TCP payload...";
+"enter_udp_payload" = "Enter UDP payload...";
+"enter_serial_payload" = "Enter serial command (AT commands supported)...";
+"enter_telnet_cmd" = "Enter Telnet command...";
+
+/* Settings */
+"settings_title" = "Settings";
+"tab_general" = "General";
+"tab_appearance" = "Appearance";
+"tab_terminal" = "Terminal";
+"tab_about" = "About";
+
+"theme_label" = "Color Theme";
+"theme_system" = "System (Auto)";
+"theme_dark" = "Dark Mode";
+"theme_light" = "Light Mode";
+
+"language_label" = "Application Language";
+"font_size_label" = "Terminal Font Size";
+"font_family_label" = "Terminal Font";
+"scrollback_label" = "Scrollback Buffer Lines";
+"about_desc" = "AeroTerm is a blazing-fast, lightweight native macOS workbench engineered with Swift 6 and SwiftUI.";
+"close" = "Close";
+
+/* Wizard Cancellation Confirmation */
+"confirm_exit_wizard" = "Exit Connection Wizard?";
+"discard_and_exit" = "Discard & Exit";
+"keep_editing" = "Keep Editing";
+"unsaved_wizard_msg" = "You have unsaved connection settings. Exiting now will discard your configuration.";
+"discard_wizard_title" = "Discard Connection Setup?";
+"discard_wizard_msg" = "Are you sure you want to exit the wizard? Any unsaved connection settings will be lost.";
+"continue_editing" = "Continue Editing";
+
+/* Xcode-style Startup Splash Window */
+"welcome_window_title" = "Welcome to AeroTerm";
+"create_new_conn_title" = "Create a New Connection...";
+"create_new_conn_subtitle" = "Configure SSH, SFTP, TCP/UDP, Serial, HTTP API or AI Agent CLI";
+"import_conn_title" = "Import Connections...";
+"import_conn_subtitle" = "Import saved profiles from JSON or OpenSSH config";
+"open_workbench_title" = "Open Main Workbench";
+"open_workbench_subtitle" = "Enter full-screen multi-protocol workspace directly";
+"show_on_launch" = "Show this window when AeroTerm launches";
+"import_success" = "Configurations imported successfully";
+"import_failed" = "Failed to parse configuration file";
