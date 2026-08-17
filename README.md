@@ -59,6 +59,12 @@ open ./dist/AeroTerm.app
 
 ---
 
+## 📄 开源许可证 (License)
+
+本项目采用 **[MIT License](LICENSE)** 开放源代码许可证。您可以自由地商用、修改、分发与私用。
+
+---
+
 ## 📚 协同与技术文档
 
 - [INDEX.md](INDEX.md) —— 多 Agent 协同主索引、架构规范与全量进度记录
