@@ -241,16 +241,21 @@ public final class SessionManager: ObservableObject {
     public func closeSession(id: UUID) {
         guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
 
+        let targetActiveID: UUID?
         if activeSessionID == id {
             if sessions.count > 1 {
-                let nextIndex = index > 0 ? index - 1 : 1
-                activeSessionID = sessions[nextIndex].id
+                // 如果关闭的是最后一个，选前一个；否则选后一个
+                let nextIdx = (index == sessions.count - 1) ? index - 1 : index + 1
+                targetActiveID = sessions[nextIdx].id
             } else {
-                activeSessionID = nil
+                targetActiveID = nil
             }
+        } else {
+            targetActiveID = activeSessionID
         }
 
         sessions.remove(at: index)
+        activeSessionID = targetActiveID
 
         let serial = serialEngines.removeValue(forKey: id)
         let tcpClient = tcpClientEngines.removeValue(forKey: id)

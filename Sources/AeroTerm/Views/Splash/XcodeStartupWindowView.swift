@@ -28,10 +28,10 @@ public struct XcodeStartupWindowView: View {
                 .frame(width: 490, height: 480)
                 .background(Color(NSColor.windowBackgroundColor))
 
-            // 2. 右侧窄版纯毛玻璃最近连接栏 (290px，无分割线，深度模糊)
+            // 2. 右侧高透晶莹毛玻璃最近连接栏 (290px，高通透质感)
             rightRecentPane
                 .frame(width: 290, height: 480)
-                .background(.ultraThinMaterial)
+                .background(.ultraThinMaterial.opacity(0.75))
         }
         .frame(width: 780, height: 480)
         .contentShape(Rectangle())
@@ -171,10 +171,10 @@ public struct XcodeStartupWindowView: View {
         }
     }
 
-    // MARK: - 右侧窄版纯毛玻璃最近连接列表 (290px，无分割线，深度模糊)
+    // MARK: - 右侧高透晶莹毛玻璃最近连接列表 (290px，高透材质)
     private var rightRecentPane: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 窄版搜索框
+            // 高透窄版搜索框
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
@@ -184,7 +184,7 @@ public struct XcodeStartupWindowView: View {
                     .font(.system(size: 11))
             }
             .padding(7)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.40))
+            .background(Color.secondary.opacity(0.08))
             .cornerRadius(6)
             .padding(.horizontal, 12)
             .padding(.top, 14)

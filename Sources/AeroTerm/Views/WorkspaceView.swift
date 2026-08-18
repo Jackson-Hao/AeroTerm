@@ -9,19 +9,13 @@ public struct WorkspaceView: View {
             if let activeSession = sessionManager.activeSession {
                 sessionContentView(for: activeSession)
                     .id(activeSession.id)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.99)),
-                        removal: .opacity
-                    ))
+                    .transition(.opacity)
             } else {
                 WelcomeHomeView()
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 1.01)),
-                        removal: .opacity
-                    ))
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: sessionManager.activeSessionID)
+        .animation(.easeInOut(duration: 0.15), value: sessionManager.activeSessionID)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
     }

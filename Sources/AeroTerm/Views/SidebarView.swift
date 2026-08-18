@@ -7,6 +7,8 @@ public struct SidebarView: View {
     @State private var hoveredActiveID: UUID? = nil
     @State private var hoveredSavedID: UUID? = nil
 
+    public init() {}
+
     public var body: some View {
         VStack(spacing: 0) {
             // 顶部原生二分切换器 (Saved | Active)
@@ -37,6 +39,7 @@ public struct SidebarView: View {
             // 底部回到主页 (Home) 与设置入口
             bottomStatusBar
         }
+        .background(.ultraThinMaterial.opacity(0.80))
         .sheet(isPresented: $sessionManager.isShowingNewConnectionWizard) {
             NewConnectionWizardView()
         }
@@ -70,6 +73,7 @@ public struct SidebarView: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -168,6 +172,7 @@ public struct SidebarView: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -256,6 +261,6 @@ public struct SidebarView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .background(.ultraThinMaterial.opacity(0.60))
     }
 }

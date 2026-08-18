@@ -18,7 +18,7 @@ public struct MainView: View {
                 NavigationSplitView(columnVisibility: $sessionManager.columnVisibility) {
                     SidebarView()
                         .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
-                        .background(.ultraThinMaterial)
+                        .background(.ultraThinMaterial.opacity(0.80))
                 } detail: {
                     WorkspaceView()
                 }
