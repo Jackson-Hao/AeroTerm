@@ -20,21 +20,24 @@ public struct SettingsView: View {
 
             Divider()
 
-            // 设置内容区
-            ScrollView {
-                VStack(spacing: 16) {
-                    switch selectedTab {
-                    case 0:
-                        appearanceSection
-                    case 1:
-                        terminalSection
-                    case 2:
-                        aboutSection
-                    default:
-                        EmptyView()
+            Group {
+                if selectedTab == 2 {
+                    AccountManagerView()
+                } else {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            switch selectedTab {
+                            case 0:
+                                appearanceSection
+                            case 1:
+                                terminalSection
+                            default:
+                                aboutSection
+                            }
+                        }
+                        .padding(20)
                     }
                 }
-                .padding(20)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -55,7 +58,7 @@ public struct SettingsView: View {
             .padding(.vertical, 12)
             .background(.ultraThinMaterial)
         }
-        .frame(width: 540, height: 460)
+        .frame(width: 680, height: selectedTab == 2 ? 500 : 460)
         .background(Color(NSColor.windowBackgroundColor))
     }
 
@@ -63,7 +66,8 @@ public struct SettingsView: View {
         HStack(spacing: 6) {
             tabButton(title: loc.text("tab_appearance"), icon: "paintbrush.fill", tag: 0)
             tabButton(title: loc.text("tab_terminal"), icon: "terminal.fill", tag: 1)
-            tabButton(title: loc.text("tab_about"), icon: "info.circle.fill", tag: 2)
+            tabButton(title: loc.text("tab_accounts"), icon: "person.crop.circle", tag: 2)
+            tabButton(title: loc.text("tab_about"), icon: "info.circle.fill", tag: 3)
         }
         .padding(3)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
@@ -258,7 +262,7 @@ public struct SettingsView: View {
                 VStack(spacing: 3) {
                     Text("AeroTerm")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
-                    Text("Version 1.0.0 (Build 2026.1)")
+                    Text("Version alpha-0818")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }

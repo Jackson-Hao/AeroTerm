@@ -1,5 +1,13 @@
 import SwiftUI
 import AppKit
+import QuartzCore
+
+public enum AppWindowLayout {
+    public static let splashSize = NSSize(width: 780, height: 520)
+    public static let wizardSize = NSSize(width: 840, height: 600)
+    public static let workbenchSize = NSSize(width: 1180, height: 720)
+    public static let workbenchMinSize = NSSize(width: 960, height: 600)
+}
 
 public struct WindowAccessor: NSViewRepresentable {
     let callback: (NSWindow) -> Void
@@ -19,9 +27,11 @@ public struct WindowAccessor: NSViewRepresentable {
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
-        if let window = nsView.window {
-            self.callback(window)
-        }
+        guard let window = nsView.window,
+              !window.inLiveResize,
+              !WindowChrome.isUserLiveResizing
+        else { return }
+        self.callback(window)
     }
 }
 
@@ -29,43 +39,115 @@ public struct WindowAccessor: NSViewRepresentable {
 public final class FullScreenWindowDelegate: NSObject, NSWindowDelegate, @unchecked Sendable {
     public static let shared = FullScreenWindowDelegate()
 
-    // 彻底拦截系统 Globe+F / Fn+F 全屏请求
-    public func customWindowsToEnterFullScreen(for window: NSWindow) -> [NSWindow]? {
-        if SessionManager.shared.isShowingStartupSplash {
-            return nil
+    static func attach(to window: NSWindow) {
+        if WindowChrome.isDetachedWindow(window) { return }
+        if window.delegate !== shared {
+            window.delegate = shared
         }
-        return nil
+    }
+
+    public func customWindowsToEnterFullScreen(for window: NSWindow) -> [NSWindow]? {
+        nil
     }
 
     public func windowWillEnterFullScreen(_ notification: Notification) {
         if SessionManager.shared.isShowingStartupSplash {
             return
         }
-        SessionManager.shared.isFullScreen = true
-        SessionManager.shared.columnVisibility = .detailOnly
+        applyFullScreenChrome(true)
+        if let window = notification.object as? NSWindow {
+            window.toolbar?.isVisible = false
+            relayoutWorkspace(window)
+        }
     }
 
     public func windowDidEnterFullScreen(_ notification: Notification) {
-        // 如果在 Splash 状态下意外触发了全屏，立即强制退出全屏
         if SessionManager.shared.isShowingStartupSplash, let window = notification.object as? NSWindow {
             window.toggleFullScreen(nil)
+            return
+        }
+        applyFullScreenChrome(true)
+        if let window = notification.object as? NSWindow {
+            window.toolbar?.isVisible = false
+            relayoutWorkspace(window, delayed: true)
         }
     }
 
     public func windowWillExitFullScreen(_ notification: Notification) {
-        SessionManager.shared.isFullScreen = false
-        SessionManager.shared.columnVisibility = .all
+        applyFullScreenChrome(false)
+        if let window = notification.object as? NSWindow {
+            window.toolbar?.isVisible = true
+        }
     }
 
-    // 启动页绝对锁死尺寸，主页面正常拉伸
+    public func windowDidExitFullScreen(_ notification: Notification) {
+        applyFullScreenChrome(false)
+        if let window = notification.object as? NSWindow {
+            window.toolbar?.isVisible = true
+            WindowChrome.sync(window)
+            relayoutWorkspace(window, delayed: true)
+        }
+    }
+
+    public func windowWillStartLiveResize(_ notification: Notification) {
+        WindowChrome.beginUserLiveResize()
+    }
+
+    public func windowDidEndLiveResize(_ notification: Notification) {
+        WindowChrome.endUserLiveResize()
+    }
+
+    public func windowDidBecomeKey(_ notification: Notification) {
+        reapplySplashChrome(notification)
+    }
+
+    public func windowDidResignKey(_ notification: Notification) {
+        reapplySplashChrome(notification)
+    }
+
+    public func windowDidBecomeMain(_ notification: Notification) {
+        reapplySplashChrome(notification)
+    }
+
+    public func windowDidResignMain(_ notification: Notification) {
+        reapplySplashChrome(notification)
+    }
+
+    private func applyFullScreenChrome(_ isFullScreen: Bool) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            SessionManager.shared.isFullScreen = isFullScreen
+            SessionManager.shared.columnVisibility = isFullScreen ? .detailOnly : .all
+        }
+    }
+
+    private func relayoutWorkspace(_ window: NSWindow, delayed: Bool = false) {
+        WorkspaceTilingNSView.relayoutAll(in: window)
+        guard delayed else { return }
+        DispatchQueue.main.async {
+            WorkspaceTilingNSView.relayoutAll(in: window)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            WorkspaceTilingNSView.relayoutAll(in: window)
+        }
+    }
+
+    private func reapplySplashChrome(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        WindowChrome.applyAfterFocusChange(to: window)
+    }
+
     public func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         if SessionManager.shared.isShowingStartupSplash {
-            return NSSize(width: 780, height: 480)
+            if SessionManager.shared.isShowingNewConnectionWizard {
+                return AppWindowLayout.wizardSize
+            }
+            return AppWindowLayout.splashSize
         }
         return frameSize
     }
 
-    // 启动页绝对禁止任何 Zoom / 标题栏双击全屏操作
     public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
         if SessionManager.shared.isShowingStartupSplash {
             return false

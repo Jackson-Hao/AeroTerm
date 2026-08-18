@@ -6,8 +6,14 @@ public struct SidebarView: View {
     @ObservedObject var loc = LocalizationManager.shared
     @State private var hoveredActiveID: UUID? = nil
     @State private var hoveredSavedID: UUID? = nil
+    @State private var isShowingConnectionManager = false
+    @State private var editingConnectionID: UUID? = nil
 
     public init() {}
+
+    private var isHomeSelected: Bool {
+        sessionManager.activeSessionID == nil && sessionManager.primarySurface.layout == nil
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -19,30 +25,57 @@ public struct SidebarView: View {
                     .tag(SidebarTab.active)
             }
             .pickerStyle(.segmented)
+            .controlSize(.regular)
             .padding(.horizontal, 14)
-            .padding(.top, 12)
+            .padding(.top, 14)
             .padding(.bottom, 10)
 
             Divider()
 
-            // 列表内容区 (根据二分按钮左右切换展示)
-            Group {
-                if sessionManager.sidebarTab == .saved {
-                    savedConnectionsList
-                } else {
-                    activeSessionsList
-                }
+            // 列表内容区 (采用稳定的 ZStack 避免切换时的尺寸突变和 UI 异常)
+            ZStack {
+                savedConnectionsList
+                    .opacity(sessionManager.sidebarTab == .saved ? 1 : 0)
+                    .allowsHitTesting(sessionManager.sidebarTab == .saved)
+
+                activeSessionsList
+                    .opacity(sessionManager.sidebarTab == .active ? 1 : 0)
+                    .allowsHitTesting(sessionManager.sidebarTab == .active)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.12), value: sessionManager.sidebarTab)
 
             Divider()
 
             // 底部回到主页 (Home) 与设置入口
             bottomStatusBar
         }
-        .background(.ultraThinMaterial.opacity(0.80))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            AppBackdrop(material: .sidebar)
+                .ignoresSafeArea(edges: .top)
+        }
         .sheet(isPresented: $sessionManager.isShowingNewConnectionWizard) {
             NewConnectionWizardView()
         }
+        .sheet(isPresented: $isShowingConnectionManager) {
+            ConnectionManagerSheet(initialSelection: editingConnectionID)
+        }
+        .onChange(of: sessionManager.sidebarTab) { _, _ in
+            hoveredActiveID = nil
+            hoveredSavedID = nil
+        }
+    }
+
+    private func savedConnectionSubtitle(_ config: ConnectionConfig) -> String {
+        if config.type == .serial {
+            return "\(config.port) bps"
+        }
+        let user = sessionManager.resolvedUsername(for: config)
+        if config.type.usesAccountAuth && !user.isEmpty {
+            return "\(user)@\(config.host):\(config.port)"
+        }
+        return "\(config.host):\(config.port)"
     }
 
     // MARK: - 1. 已保存连接列表 (Saved Connections)
@@ -65,22 +98,27 @@ public struct SidebarView: View {
                     .buttonStyle(.plain)
                     Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    ForEach(sessionManager.savedConnections) { config in
-                        savedConnectionRow(config: config)
+                ScrollView {
+                    LazyVStack(spacing: 3) {
+                        ForEach(sessionManager.savedConnections) { config in
+                            savedConnectionRow(config: config)
+                        }
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
                 }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func savedConnectionRow(config: ConnectionConfig) -> some View {
         let isCurrentlyOpen = sessionManager.sessions.contains { $0.host == config.host && $0.port == config.port && $0.type == config.type }
         let isCurrentlyActive = sessionManager.activeSession != nil && sessionManager.activeSession?.host == config.host && sessionManager.activeSession?.port == config.port && sessionManager.activeSession?.type == config.type
+        let isHovered = hoveredSavedID == config.id
 
         return HStack(spacing: 8) {
             Image(systemName: config.type.iconName)
@@ -94,7 +132,7 @@ public struct SidebarView: View {
                     .foregroundColor(isCurrentlyActive ? .primary : .primary.opacity(0.85))
                     .lineLimit(1)
 
-                Text(config.type == .serial ? "\(config.port) bps" : "\(config.host):\(config.port)")
+                Text(savedConnectionSubtitle(config))
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -108,38 +146,42 @@ public struct SidebarView: View {
                     .frame(width: 5, height: 5)
             }
 
-            if hoveredSavedID == config.id {
+            if isHovered {
                 Button {
-                    sessionManager.deleteSavedConnection(id: config.id)
+                    sessionManager.requestDeleteConnection(id: config.id)
                 } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 9.5))
+                        .font(.system(size: 10))
                         .foregroundColor(.secondary.opacity(0.8))
                 }
                 .buttonStyle(.plain)
                 .help(loc.text("delete_config"))
             }
         }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(hoveredSavedID == config.id ? Color.secondary.opacity(0.08) : Color.clear)
+                .fill(isHovered ? Color.primary.opacity(0.06) : Color.clear)
         )
         .contentShape(Rectangle())
         .onTapGesture {
             sessionManager.openFromConfig(config)
         }
-        .onHover { isHovered in
-            hoveredSavedID = isHovered ? config.id : nil
+        .onHover { hovered in
+            hoveredSavedID = hovered ? config.id : nil
         }
         .contextMenu {
             Button(loc.text("start_connection")) {
                 sessionManager.openFromConfig(config)
             }
+            Button(loc.text("edit_config")) {
+                editingConnectionID = config.id
+                isShowingConnectionManager = true
+            }
             Divider()
             Button(loc.text("delete_config"), role: .destructive) {
-                sessionManager.deleteSavedConnection(id: config.id)
+                sessionManager.requestDeleteConnection(id: config.id)
             }
         }
     }
@@ -164,25 +206,30 @@ public struct SidebarView: View {
                     .buttonStyle(.plain)
                     Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    ForEach(sessionManager.sessions) { session in
-                        activeSessionRow(session: session)
+                ScrollView {
+                    LazyVStack(spacing: 3) {
+                        ForEach(sessionManager.sessions) { session in
+                            activeSessionRow(session: session)
+                        }
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
                 }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func activeSessionRow(session: SessionItem) -> some View {
         let isSelected = sessionManager.activeSessionID == session.id
+        let isHovered = hoveredActiveID == session.id
 
         return HStack(spacing: 8) {
             Circle()
-                .fill(session.isConnected ? Color.green : Color.yellow)
+                .fill(session.indicatorColor)
                 .frame(width: 7, height: 7)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -199,33 +246,97 @@ public struct SidebarView: View {
 
             Spacer()
 
-            if hoveredActiveID == session.id || isSelected {
+            if sessionManager.isSessionDetached(session.id) {
+                Image(systemName: "macwindow")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .help(loc.text("session_pop_out"))
+            }
+
+            if isHovered || isSelected {
                 Button {
-                    sessionManager.closeSession(id: session.id)
+                    sessionManager.requestCloseSession(id: session.id)
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 8.5, weight: .bold))
                         .foregroundColor(.secondary)
                         .frame(width: 14, height: 14)
-                        .background(Color.secondary.opacity(0.14))
+                        .background(Color.secondary.opacity(0.18))
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .help(loc.text("close_session"))
             }
         }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.14) : (hoveredActiveID == session.id ? Color.secondary.opacity(0.08) : Color.clear))
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? Color.primary.opacity(0.06) : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            sessionManager.activeSessionID = session.id
+            sessionManager.selectSession(session.id)
         }
-        .onHover { isHovered in
-            hoveredActiveID = isHovered ? session.id : nil
+        .onHover { hovered in
+            hoveredActiveID = hovered ? session.id : nil
+        }
+        .onDrag {
+            SessionDragPayload.provider(for: session.id)
+        }
+        .contextMenu {
+            Button {
+                sessionManager.duplicateSession(session)
+            } label: {
+                Label(loc.text("session_duplicate"), systemImage: "plus.square.on.square")
+            }
+
+            Button {
+                sessionManager.toggleSessionSuspended(id: session.id)
+            } label: {
+                Label(
+                    session.isSuspended ? loc.text("session_resume") : loc.text("session_suspend"),
+                    systemImage: session.isSuspended ? "play.circle.fill" : "pause.circle.fill"
+                )
+            }
+            .foregroundStyle(session.isSuspended ? Color.green : Color.yellow)
+
+            Divider()
+
+            if sessionManager.isSessionDetached(session.id) {
+                Button {
+                    sessionManager.mergeSessionToMain(session.id)
+                } label: {
+                    Label(loc.text("session_merge_main"), systemImage: "rectangle.badge.arrow.left")
+                }
+            } else {
+                Button {
+                    sessionManager.detachSession(session.id)
+                } label: {
+                    Label(loc.text("session_pop_out"), systemImage: "macwindow")
+                }
+            }
+
+            Button {
+                sessionManager.splitSession(session.id, axis: .horizontal)
+            } label: {
+                Label(loc.text("session_split_right"), systemImage: "rectangle.split.2x1")
+            }
+
+            Button {
+                sessionManager.splitSession(session.id, axis: .vertical)
+            } label: {
+                Label(loc.text("session_split_down"), systemImage: "rectangle.split.1x2")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                sessionManager.requestCloseSession(id: session.id)
+            } label: {
+                Label(loc.text("session_close"), systemImage: "xmark.circle.fill")
+            }
+            .foregroundStyle(Color.red)
         }
     }
 
@@ -238,10 +349,10 @@ public struct SidebarView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 11))
-                        .foregroundColor(sessionManager.activeSessionID == nil ? .accentColor : .secondary)
+                        .foregroundColor(isHomeSelected ? .accentColor : .secondary)
                     Text(loc.text("welcome_home"))
-                        .font(.system(size: 11, weight: sessionManager.activeSessionID == nil ? .semibold : .regular))
-                        .foregroundColor(sessionManager.activeSessionID == nil ? .primary : .secondary)
+                        .font(.system(size: 11, weight: isHomeSelected ? .semibold : .regular))
+                        .foregroundColor(isHomeSelected ? .primary : .secondary)
                 }
             }
             .buttonStyle(.plain)
@@ -261,6 +372,6 @@ public struct SidebarView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial.opacity(0.60))
+        .background(Color.clear)
     }
 }

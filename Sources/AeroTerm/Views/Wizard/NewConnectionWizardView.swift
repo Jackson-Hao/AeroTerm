@@ -8,8 +8,8 @@ public struct NewConnectionWizardView: View {
     @ObservedObject var agentService = AgentCLIService.shared
 
     @State private var currentStep: Int = 1
-    @State private var selectedCategory: SessionCategory = .agentCLI
-    @State private var selectedType: SessionType = .agentCLI
+    @State private var selectedCategory: SessionCategory = .remote
+    @State private var selectedType: SessionType = .ssh
     @State private var selectedAgentCLI: AgentCLIConfig? = nil
 
     // Step 2 Form States
@@ -18,8 +18,12 @@ public struct NewConnectionWizardView: View {
     @State private var portString = "22"
     @State private var username = ""
     @State private var password = ""
+    @State private var selectedAccountID: UUID?
     @State private var saveToFavorites = true
     @State private var isShowingCancelAlert = false
+    @State private var isConnecting = false
+    @State private var isShowingAccountEditor = false
+    @State private var isShowingAccountManager = false
 
     // Serial Specific
     @State private var selectedSerialPort = ""
@@ -40,38 +44,43 @@ public struct NewConnectionWizardView: View {
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 0) {
-            // 顶部向导进度条
-            wizardHeader
-                .padding(.horizontal, 24)
-                .padding(.top, 18)
-                .padding(.bottom, 14)
+        ZStack {
+            AppBackdrop(material: .sidebar)
+                .ignoresSafeArea()
 
-            Divider()
+            VStack(spacing: 0) {
+                wizardHeader
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 14)
+                    .background(Color.primary.opacity(0.035))
 
-            // 核心向导内容 (840 x 600)
-            Group {
-                if currentStep == 1 {
-                    step1ProtocolSelection
-                } else {
-                    step2ConfigurationForm
+                Divider().opacity(0.35)
+
+                Group {
+                    if currentStep == 1 {
+                        step1ProtocolSelection
+                    } else {
+                        step2ConfigurationForm
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Divider().opacity(0.35)
+
+                wizardFooter
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 14)
+                    .background(Color.primary.opacity(0.03))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider()
-
-            // 底部操作栏
-            wizardFooter
-                .padding(.horizontal, 24)
-                .padding(.vertical, 14)
-                .background(.ultraThinMaterial)
         }
-        .frame(width: 840, height: 600)
-        .background(Color(NSColor.windowBackgroundColor))
+        .frame(minWidth: 840, minHeight: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .toolbar(.hidden, for: .windowToolbar)
         .alert(loc.text("confirm_exit_wizard"), isPresented: $isShowingCancelAlert) {
             Button(loc.text("discard_and_exit"), role: .destructive) {
-                sessionManager.isShowingNewConnectionWizard = false
+                sessionManager.closeWizard(enterWorkbench: false)
                 dismiss()
             }
             Button(loc.text("keep_editing"), role: .cancel) {}
@@ -81,9 +90,6 @@ public struct NewConnectionWizardView: View {
         .onAppear {
             if agentService.availableAgents.isEmpty {
                 agentService.loadConfigsFromXML()
-            }
-            if selectedAgentCLI == nil, let first = agentService.availableAgents.first {
-                selectAgent(first)
             }
         }
     }
@@ -152,7 +158,12 @@ public struct NewConnectionWizardView: View {
                 Spacer()
             }
             .frame(width: 240)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.45))
+            .background {
+                ZStack {
+                    AppBackdrop(material: .sidebar)
+                    Color.primary.opacity(0.025)
+                }
+            }
 
             Divider()
 
@@ -406,8 +417,27 @@ public struct NewConnectionWizardView: View {
 
                 Toggle(loc.text("save_to_saved_connections"), isOn: $saveToFavorites)
                     .font(.system(size: 12))
+                Text(loc.text("verify_then_save_hint"))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
             }
             .padding(24)
+        }
+        .sheet(isPresented: $isShowingAccountEditor) {
+            AccountEditorView(
+                account: nil,
+                defaultKind: selectedType.accountKind,
+                onSave: { account in
+                    selectedAccountID = account.id
+                    isShowingAccountEditor = false
+                },
+                onCancel: { isShowingAccountEditor = false }
+            )
+            .padding(22)
+            .frame(width: 460)
+        }
+        .sheet(isPresented: $isShowingAccountManager) {
+            AccountManagerSheet()
         }
     }
 
@@ -485,24 +515,58 @@ public struct NewConnectionWizardView: View {
                 }
             }
 
-            if selectedType == .ssh || selectedType == .sftp || selectedType == .telnet || selectedType == .rdp {
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(loc.text("username_label"))
-                            .font(.system(size: 12, weight: .semibold))
-                        TextField("Optional user", text: $username)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(loc.text("password_label"))
-                            .font(.system(size: 12, weight: .semibold))
-                        SecureField("Optional password", text: $password)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
+            if selectedType.usesAccountPicker {
+                remoteAccountPicker
             }
         }
+    }
+
+    private var remoteAccountPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(loc.text("account_label"))
+                .font(.system(size: 12, weight: .semibold))
+
+            HStack(spacing: 8) {
+                Picker("", selection: $selectedAccountID) {
+                    Text(loc.text("account_select_placeholder")).tag(Optional<UUID>.none)
+                    ForEach(sessionManager.accounts(for: selectedType)) { account in
+                        Text(account.pickerLabel).tag(Optional(account.id))
+                    }
+                }
+                .labelsHidden()
+
+                Button(loc.text("account_new")) {
+                    isShowingAccountEditor = true
+                }
+                Button(loc.text("account_manage")) {
+                    isShowingAccountManager = true
+                }
+            }
+
+            if let account = sessionManager.account(id: selectedAccountID) {
+                Text("\(account.kind.displayName)  ·  \(account.username.isEmpty ? "—" : account.username)  ·  \(account.methodLabel)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            } else {
+                Text(loc.text("account_picker_hint"))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .onAppear {
+            syncAccountSelection()
+        }
+        .onChange(of: selectedType) { _, _ in
+            syncAccountSelection()
+        }
+    }
+
+    private func syncAccountSelection() {
+        let matched = sessionManager.accounts(for: selectedType)
+        if let selectedAccountID, matched.contains(where: { $0.id == selectedAccountID }) {
+            return
+        }
+        selectedAccountID = matched.first?.id
     }
 
     private var serialFormSection: some View {
@@ -575,19 +639,21 @@ public struct NewConnectionWizardView: View {
                 .buttonStyle(.bordered)
             }
 
-            Button(currentStep == 1 ? loc.text("next") : loc.text("connect_btn")) {
+            Button(currentStep == 1 ? loc.text("next") : (isConnecting ? loc.text("ssh_probing") : loc.text("connect_btn"))) {
                 if currentStep == 1 {
                     goToStep2()
                 } else {
-                    handleConnect()
+                    Task { await handleConnect() }
                 }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
+            .disabled(isConnecting)
         }
     }
 
-    private func handleConnect() {
+    private func handleConnect() async {
+        let launchedFromSplash = sessionManager.isShowingStartupSplash
         let portInt = Int(portString) ?? selectedType.defaultPort
 
         if selectedType == .agentCLI {
@@ -605,6 +671,9 @@ public struct NewConnectionWizardView: View {
                 environmentVariables: agentEnvValues
             )
 
+            sessionManager.sessions.append(session)
+            sessionManager.activeSessionID = session.id
+            sessionManager.addRecent(RecentConnection(title: displayTitle, type: .agentCLI, host: agentCommand, port: 0))
             if saveToFavorites {
                 let config = ConnectionConfig(
                     name: displayTitle,
@@ -618,14 +687,26 @@ public struct NewConnectionWizardView: View {
                 )
                 sessionManager.saveConnection(config, connectImmediately: false)
             }
+            finishConnect(launchedFromSplash: launchedFromSplash)
+            return
+        }
 
-            sessionManager.sessions.append(session)
-            sessionManager.activeSessionID = session.id
-            sessionManager.sidebarTab = .active
-            sessionManager.addRecent(RecentConnection(title: displayTitle, type: .agentCLI, host: agentCommand, port: 0))
-
-            sessionManager.isShowingNewConnectionWizard = false
-            dismiss()
+        if selectedType.usesAccountAuth {
+            guard let accountID = selectedAccountID,
+                  let account = sessionManager.account(id: accountID) else {
+                sessionManager.alertMessage = loc.text("account_required")
+                return
+            }
+            let config = ConnectionConfig(
+                name: connectionName.isEmpty ? "\(selectedType.rawValue) - \(account.username)@\(host)" : connectionName,
+                type: selectedType,
+                host: host,
+                port: portInt,
+                username: account.username,
+                authMethod: account.authMethod,
+                accountID: account.id
+            )
+            sessionManager.beginRemoteConnect(config, saveOnSuccess: saveToFavorites)
             return
         }
 
@@ -637,13 +718,18 @@ public struct NewConnectionWizardView: View {
             username: username
         )
 
+        let opened = sessionManager.openFromConfig(config)
+        guard opened else { return }
         if saveToFavorites {
-            sessionManager.saveConnection(config, connectImmediately: true)
-        } else {
-            sessionManager.openFromConfig(config)
+            sessionManager.saveConnection(config, connectImmediately: false)
         }
+        finishConnect(launchedFromSplash: launchedFromSplash)
+    }
 
-        sessionManager.isShowingNewConnectionWizard = false
-        dismiss()
+    private func finishConnect(launchedFromSplash: Bool) {
+        sessionManager.enterWorkbench()
+        if !launchedFromSplash {
+            dismiss()
+        }
     }
 }

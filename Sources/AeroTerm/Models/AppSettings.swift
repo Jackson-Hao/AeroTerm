@@ -58,12 +58,6 @@ public final class SettingsManager: ObservableObject {
         }
     }
 
-    @Published public var showWelcomeOnLaunch: Bool = true {
-        didSet {
-            UserDefaults.standard.set(showWelcomeOnLaunch, forKey: "AeroTerm.ShowWelcomeOnLaunch.v2")
-        }
-    }
-
     @Published public var isShowingSettingsSheet: Bool = false
 
     private init() {
@@ -91,12 +85,6 @@ public final class SettingsManager: ObservableObject {
         } else {
             self.terminalFontName = "CascadiaCodeNF-Regular"
             UserDefaults.standard.set("CascadiaCodeNF-Regular", forKey: "AeroTerm.TerminalFontName.v2")
-        }
-
-        if UserDefaults.standard.object(forKey: "AeroTerm.ShowWelcomeOnLaunch.v2") != nil {
-            self.showWelcomeOnLaunch = UserDefaults.standard.bool(forKey: "AeroTerm.ShowWelcomeOnLaunch.v2")
-        } else {
-            self.showWelcomeOnLaunch = true
         }
     }
 

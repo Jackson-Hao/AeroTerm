@@ -35,9 +35,10 @@ public struct SwiftTermContainerView: NSViewRepresentable {
     public func makeNSView(context: Context) -> LocalProcessTerminalView {
         let terminalView = LocalProcessTerminalView(frame: .zero)
         terminalView.autoresizingMask = [.width, .height]
+        terminalView.focusRingType = .none
         terminalView.processDelegate = context.coordinator
         
-        applyTheme(to: terminalView)
+        applyTheme(to: terminalView, lastSignature: &context.coordinator.themeSignature)
         
         // 准备工作目录
         let expandedDir: String
@@ -99,26 +100,24 @@ public struct SwiftTermContainerView: NSViewRepresentable {
     }
 
     public func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
-        applyTheme(to: nsView)
+        applyTheme(to: nsView, lastSignature: &context.coordinator.themeSignature)
         context.coordinator.onProcessTerminated = onProcessTerminated
     }
 
-    private func applyTheme(to terminalView: LocalProcessTerminalView) {
-        let theme = themeManager.currentTheme
-        terminalView.nativeBackgroundColor = NSColor(theme.bg)
-        terminalView.nativeForegroundColor = NSColor(theme.textPrimary)
-        terminalView.caretColor = NSColor(theme.accent)
-        
-        // 设置 Cascadia Code NF 字体
-        if let font = NSFont(name: settings.terminalFontName, size: CGFloat(settings.terminalFontSize)) {
-            terminalView.font = font
-        } else {
-            terminalView.font = NSFont.monospacedSystemFont(ofSize: CGFloat(settings.terminalFontSize), weight: .regular)
-        }
+    public func sizeThatFits(_ proposal: ProposedViewSize, nsView: LocalProcessTerminalView, context: Context) -> CGSize? {
+        CGSize(
+            width: proposal.width ?? max(nsView.bounds.width, 1),
+            height: proposal.height ?? max(nsView.bounds.height, 1)
+        )
+    }
+
+    private func applyTheme(to terminalView: LocalProcessTerminalView, lastSignature: inout String) {
+        TerminalAppearance.apply(to: terminalView, lastSignature: &lastSignature)
     }
 
     public final class Coordinator: NSObject, LocalProcessTerminalViewDelegate, @unchecked Sendable {
         var onProcessTerminated: (@Sendable () -> Void)?
+        var themeSignature = ""
 
         init(onProcessTerminated: (@Sendable () -> Void)?) {
             self.onProcessTerminated = onProcessTerminated

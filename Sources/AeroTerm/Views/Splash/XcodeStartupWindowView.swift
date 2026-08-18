@@ -1,129 +1,168 @@
 import SwiftUI
 import AppKit
 
+/// Xcode Welcome 风格启动窗。
+/// 左侧较大：品牌信息与入口选择（半透明，透明度较低）。
+/// 右侧较小：最近连接历史（更高透）。
+/// 不使用系统 Titlebar；左上角自定义关闭红灯。
 public struct XcodeStartupWindowView: View {
     @ObservedObject var sessionManager = SessionManager.shared
     @ObservedObject var loc = LocalizationManager.shared
 
     @State private var searchText = ""
-    @State private var hoveredRecentID: UUID? = nil
-    @State private var hoveredActionIndex: Int? = nil
+    @State private var hoveredActionIndex: Int?
+    @State private var hoveredRecentID: UUID?
+    @State private var isFilterFocused: Bool = false
+    @State private var isCloseHovered: Bool = false
+
+    private let rightWidth: CGFloat = 268
+    private let actionColumnWidth: CGFloat = 336
 
     private var filteredRecents: [RecentConnection] {
-        if searchText.isEmpty {
-            return sessionManager.recentConnections
-        } else {
-            return sessionManager.recentConnections.filter {
-                $0.title.localizedCaseInsensitiveContains(searchText) ||
-                $0.host.localizedCaseInsensitiveContains(searchText) ||
-                $0.type.rawValue.localizedCaseInsensitiveContains(searchText)
-            }
+        let recents = sessionManager.recentConnections
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return recents }
+        return recents.filter {
+            $0.title.localizedCaseInsensitiveContains(query) ||
+            $0.host.localizedCaseInsensitiveContains(query) ||
+            $0.type.rawValue.localizedCaseInsensitiveContains(query)
         }
     }
+
+    public init() {}
 
     public var body: some View {
-        HStack(spacing: 0) {
-            // 1. 左侧主要品牌与三大功能操作区 (490px)
-            leftBrandPane
-                .frame(width: 490, height: 480)
-                .background(Color(NSColor.windowBackgroundColor))
+        ZStack(alignment: .topLeading) {
+            // 整窗一层连续模糊，避免底边、圆角和中缝漏出纯透明桌面
+            windowBackdrop
 
-            // 2. 右侧高透晶莹毛玻璃最近连接栏 (290px，高通透质感)
-            rightRecentPane
-                .frame(width: 290, height: 480)
-                .background(.ultraThinMaterial.opacity(0.75))
+            HStack(spacing: 0) {
+                leftInfoPane
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Rectangle()
+                    .fill(Color.primary.opacity(0.14))
+                    .frame(width: 1)
+                    .padding(.vertical, 0)
+
+                rightHistoryPane
+                    .frame(width: rightWidth)
+                    .frame(maxHeight: .infinity)
+            }
+
+            customCloseButton
+                .padding(.leading, 14)
+                .padding(.top, 14)
         }
-        .frame(width: 780, height: 480)
-        .contentShape(Rectangle())
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
     }
 
-    // MARK: - 左侧品牌与三大无背景操作
-    private var leftBrandPane: some View {
+    // MARK: - Backdrop（单层铺满，左右只叠遮罩）
+
+    private var windowBackdrop: some View {
+        ZStack {
+            AppBackdrop(material: .sidebar)
+
+            HStack(spacing: 0) {
+                Color(NSColor.windowBackgroundColor).opacity(0.10)
+                Color.clear
+                    .frame(width: rightWidth)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+    }
+
+    private var customCloseButton: some View {
+        Button {
+            NSApplication.shared.terminate(nil)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Color(red: 1.0, green: 0.36, blue: 0.34))
+                    .frame(width: 12, height: 12)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
+                    )
+
+                if isCloseHovered {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 7, weight: .black))
+                        .foregroundStyle(Color(red: 0.30, green: 0.02, blue: 0.02))
+                }
+            }
+            .frame(width: 16, height: 16)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isCloseHovered = $0 }
+        .help(loc.text("close"))
+    }
+
+    // MARK: - 左侧：信息与选择
+
+    private var leftInfoPane: some View {
         VStack(spacing: 0) {
-            // 顶部系统红灯自然留白
+            Spacer().frame(height: 44)
+
+            appIconView
+                .frame(width: 148, height: 148)
+                .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
+
+            VStack(spacing: 4) {
+                Text(loc.text("welcome_window_title"))
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(.primary)
+
+                Text("Version alpha-0818")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 12)
+
             Spacer().frame(height: 24)
 
-            // 大号 Logo 图标 (140x140) + 超大范围 300x300 环境背光
-            ZStack {
-                // 超大范围环境光晕 (300x300, blur 32)
-                RadialGradient(
-                    colors: [
-                        Color.blue.opacity(0.45),
-                        Color.purple.opacity(0.28),
-                        Color.cyan.opacity(0.15),
-                        Color.clear
-                    ],
-                    center: .center,
-                    startRadius: 40,
-                    endRadius: 150
-                )
-                .frame(width: 300, height: 300)
-                .blur(radius: 32)
-
-                // 140x140 高清大 Logo
-                appRealIconView
-                    .frame(width: 140, height: 140)
-                    .shadow(color: .black.opacity(0.30), radius: 20, x: 0, y: 10)
-            }
-            .frame(height: 144)
-
-            // 标题与版本
-            VStack(spacing: 2) {
-                Text(loc.text("app_title"))
-                    .font(.system(size: 27, weight: .bold, design: .rounded))
-                Text("Version 1.0 (Build 2026.1)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.top, 4)
-
-            // 稍微下移间距 (加宽至 28px)
-            Spacer().frame(height: 28)
-
-            // 三大核心功能操作 (纯透明背景，仅悬浮微光)
-            VStack(spacing: 8) {
-                cleanActionRow(
+            VStack(alignment: .leading, spacing: 2) {
+                actionRow(
                     index: 0,
-                    icon: "plus.circle.fill",
-                    color: .blue,
+                    icon: "plus.rectangle",
                     title: loc.text("create_new_conn_title"),
                     subtitle: loc.text("create_new_conn_subtitle")
                 ) {
-                    sessionManager.isShowingStartupSplash = false
                     sessionManager.isShowingNewConnectionWizard = true
                 }
 
-                cleanActionRow(
+                actionRow(
                     index: 1,
-                    icon: "square.and.arrow.down.fill",
-                    color: .orange,
+                    icon: "square.and.arrow.down",
                     title: loc.text("import_conn_title"),
                     subtitle: loc.text("import_conn_subtitle")
                 ) {
                     handleImportConnections()
                 }
 
-                cleanActionRow(
+                actionRow(
                     index: 2,
-                    icon: "macwindow",
-                    color: .purple,
+                    icon: "folder",
                     title: loc.text("open_workbench_title"),
                     subtitle: loc.text("open_workbench_subtitle")
                 ) {
-                    sessionManager.isShowingStartupSplash = false
+                    sessionManager.enterWorkbench()
                 }
             }
-            .padding(.horizontal, 24)
+            .frame(width: actionColumnWidth, alignment: .leading)
 
-            Spacer().frame(height: 20)
+            Spacer(minLength: 24)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
     }
 
-    // 纯透明无边框、稍微下移的操作条目 (仅 Hover 时有轻淡微光)
-    private func cleanActionRow(
+    private func actionRow(
         index: Int,
         icon: String,
-        color: Color,
         title: String,
         subtitle: String,
         action: @escaping () -> Void
@@ -131,37 +170,34 @@ public struct XcodeStartupWindowView: View {
         let isHovered = hoveredActionIndex == index
 
         return Button(action: action) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(color.opacity(isHovered ? 0.22 : 0.12))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(color)
-                }
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 28, height: 28)
+                    .padding(.top, 1)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+
                     Text(subtitle)
-                        .font(.system(size: 10.5))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(2)
                 }
 
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(isHovered ? .primary.opacity(0.8) : .secondary.opacity(0.35))
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered ? Color.secondary.opacity(0.08) : Color.clear)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(isHovered ? 0.06 : 0))
             )
             .contentShape(Rectangle())
         }
@@ -171,100 +207,174 @@ public struct XcodeStartupWindowView: View {
         }
     }
 
-    // MARK: - 右侧高透晶莹毛玻璃最近连接列表 (290px，高透材质)
-    private var rightRecentPane: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 高透窄版搜索框
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 11))
-                TextField("Filter recent...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11))
-            }
-            .padding(7)
-            .background(Color.secondary.opacity(0.08))
-            .cornerRadius(6)
-            .padding(.horizontal, 12)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
+    // MARK: - 右侧：历史记录
 
-            // 最近记录内容
+    private var rightHistoryPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            filterField
+                .padding(.horizontal, 12)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
             if filteredRecents.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "clock")
-                        .font(.system(size: 28))
-                        .foregroundColor(.secondary.opacity(0.3))
-                    Text(searchText.isEmpty ? "No recent connections" : "No matching connections")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyHistory
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 3) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 1) {
                         ForEach(filteredRecents) { item in
-                            narrowRecentRow(item: item)
+                            historyRow(item: item)
                         }
                     }
-                    .padding(8)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 10)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private func narrowRecentRow(item: RecentConnection) -> some View {
-        let isHovered = hoveredRecentID == item.id
+    private var filterField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
 
-        return HStack(spacing: 9) {
-            Image(systemName: item.type.iconName)
-                .font(.system(size: 13.5))
-                .foregroundColor(item.type.tintColor)
-                .frame(width: 18)
+            TextField(loc.text("filter_recents"), text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.primary)
+                .onSubmit {
+                    openFirstFilteredRecent()
+                }
 
-            VStack(alignment: .leading, spacing: 1.5) {
-                Text(item.title)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-
-                Text("\(item.host):\(item.port)")
-                    .font(.system(size: 9.5, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            if isHovered {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 12.5))
-                    .foregroundColor(.accentColor)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary.opacity(0.8))
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.accentColor.opacity(0.12) : Color.clear)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(isFilterFocused ? 0.08 : 0.055))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(Color.primary.opacity(isFilterFocused ? 0.14 : 0.06), lineWidth: 1)
+        )
+        .onHover { hovering in
+            isFilterFocused = hovering
+        }
+    }
+
+    private var emptyHistory: some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Image(systemName: "clock")
+                .font(.system(size: 26, weight: .light))
+                .foregroundStyle(.secondary.opacity(0.35))
+            Text(searchText.isEmpty ? loc.text("no_recent_history") : loc.text("no_matching_connections"))
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 18)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func historyRow(item: RecentConnection) -> some View {
+        let isHovered = hoveredRecentID == item.id
+
+        return HStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: item.type.iconName)
+                    .font(.system(size: 13))
+                    .foregroundStyle(item.type.tintColor)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(recentSubtitle(item))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                openRecent(item)
+            }
+
+            if isHovered {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        sessionManager.removeRecent(id: item.id)
+                    }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color.primary.opacity(isHovered ? 0.08 : 0))
         )
         .contentShape(Rectangle())
-        .onTapGesture {
-            sessionManager.isShowingStartupSplash = false
-            _ = sessionManager.openSession(
-                type: item.type,
-                host: item.host,
-                port: item.port,
-                title: item.title,
-                username: item.username
-            )
-        }
         .onHover { hovering in
             hoveredRecentID = hovering ? item.id : nil
         }
+        .contextMenu {
+            Button(loc.text("start_connection")) {
+                openRecent(item)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func recentSubtitle(_ item: RecentConnection) -> String {
+        if item.type == .serial {
+            return "\(item.host)  \(item.port) bps"
+        }
+        if item.type == .agentCLI {
+            return item.host
+        }
+        return "\(item.host):\(item.port)"
+    }
+
+    private func openRecent(_ item: RecentConnection) {
+        let opened = sessionManager.openSession(
+            type: item.type,
+            host: item.host,
+            port: item.port,
+            title: item.title,
+            username: item.username,
+            accountID: item.accountID
+        )
+        if opened {
+            sessionManager.enterWorkbench()
+        }
+    }
+
+    private func openFirstFilteredRecent() {
+        guard let first = filteredRecents.first else { return }
+        openRecent(first)
     }
 
     private func handleImportConnections() {
@@ -275,31 +385,53 @@ public struct XcodeStartupWindowView: View {
         panel.allowedContentTypes = [.json]
 
         if panel.runModal() == .OK, let url = panel.url {
-            sessionManager.importConnections(from: url)
-            sessionManager.isShowingStartupSplash = false
+            if sessionManager.importConnections(from: url) {
+                sessionManager.enterWorkbench()
+            }
         }
     }
 
-    private var appRealIconView: some View {
+    private var appIconView: some View {
         Group {
-            if let img = NSImage(named: NSImage.applicationIconName) {
-                Image(nsImage: img)
+            if let image = resolvedAppIcon() {
+                Image(nsImage: image)
                     .resizable()
+                    .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
-            } else if let img = NSImage(contentsOfFile: "/Users/jackson-hao/code/AeroTerm/Assets/AppIcon_1024.png") {
-                Image(nsImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .cornerRadius(28)
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 28)
-                        .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.22, green: 0.48, blue: 0.96),
+                                    Color(red: 0.36, green: 0.28, blue: 0.86)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                     Text(">_")
-                        .font(.system(size: 48, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .font(.system(size: 44, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
                 }
             }
         }
+    }
+
+    private func resolvedAppIcon() -> NSImage? {
+        if let image = NSImage(named: NSImage.applicationIconName), image.size.width > 16 {
+            return image
+        }
+        let candidates = [
+            Bundle.main.url(forResource: "AppIcon_1024", withExtension: "png"),
+            Bundle.module.url(forResource: "AppIcon_1024", withExtension: "png")
+        ]
+        for url in candidates.compactMap({ $0 }) {
+            if let image = NSImage(contentsOf: url) {
+                return image
+            }
+        }
+        return nil
     }
 }

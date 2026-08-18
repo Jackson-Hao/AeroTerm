@@ -1,42 +1,49 @@
 import SwiftUI
+import AppKit
 
 public struct WorkspaceView: View {
     @ObservedObject var sessionManager = SessionManager.shared
-    @ObservedObject var settings = SettingsManager.shared
+
+    private var primary: WorkspaceSurface {
+        sessionManager.primarySurface
+    }
+
+    private var keepAliveSessions: [SessionItem] {
+        sessionManager.sessions.filter { sessionManager.needsOffscreenKeepAlive($0) }
+    }
 
     public var body: some View {
         ZStack {
-            if let activeSession = sessionManager.activeSession {
-                sessionContentView(for: activeSession)
-                    .id(activeSession.id)
-                    .transition(.opacity)
+            if let layout = primary.layout {
+                PaneTreeView(
+                    node: layout,
+                    surfaceID: primary.id,
+                    showsHeaderWhenSingle: layout.sessionIDs.count > 1 || hasSplit(layout)
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 WelcomeHomeView()
-                    .transition(.opacity)
+                WorkspaceDropCatcher(surfaceID: primary.id)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: sessionManager.activeSessionID)
+        .background {
+            ForEach(keepAliveSessions) { session in
+                SessionContentView(session: session)
+                    .frame(width: 1, height: 1)
+                    .opacity(0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .focusEffectDisabled()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(sessionManager.isFullScreen ? .container : [])
         .background(Color(NSColor.windowBackgroundColor))
     }
 
-    @ViewBuilder
-    private func sessionContentView(for session: SessionItem) -> some View {
-        switch session.type {
-        case .tcpClient, .tcpServer:
-            TCPToolView(session: session)
-        case .udpTool:
-            UDPToolView(session: session)
-        case .serial:
-            SerialToolView(session: session)
-        case .telnet:
-            TelnetToolView(session: session)
-        case .httpClient:
-            HTTPToolView(session: session)
-        case .agentCLI:
-            AgentCLIToolView(session: session)
-        case .ssh, .sftp, .vnc, .rdp:
-            WelcomeHomeView()
-        }
+    private func hasSplit(_ node: PaneNode) -> Bool {
+        if case .split = node { return true }
+        return false
     }
 }

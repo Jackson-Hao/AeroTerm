@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-public struct TelnetToolView: View {
+public struct SSHToolView: View {
     let session: SessionItem
     @ObservedObject var sessionManager = SessionManager.shared
 
@@ -10,15 +10,15 @@ public struct TelnetToolView: View {
     }
 
     public var body: some View {
-        if let runtime = sessionManager.telnetSessions[session.id] {
-            TelnetTerminalAttachView(runtime: runtime)
+        if let runtime = sessionManager.sshSessions[session.id] {
+            SSHTerminalAttachView(runtime: runtime)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             VStack(spacing: 10) {
-                Image(systemName: "network")
+                Image(systemName: "terminal")
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
-                Text("Telnet session is not connected.")
+                Text("SSH session is not connected.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -27,8 +27,8 @@ public struct TelnetToolView: View {
     }
 }
 
-private struct TelnetTerminalAttachView: NSViewRepresentable {
-    @ObservedObject var runtime: TelnetTerminalSession
+private struct SSHTerminalAttachView: NSViewRepresentable {
+    @ObservedObject var runtime: SSHTerminalSession
     @ObservedObject var settings = SettingsManager.shared
     @ObservedObject var themeManager = ThemeManager.shared
 
@@ -63,8 +63,8 @@ private struct TelnetTerminalAttachView: NSViewRepresentable {
     }
 
     final class Coordinator {
-        let runtime: TelnetTerminalSession
-        init(runtime: TelnetTerminalSession) {
+        let runtime: SSHTerminalSession
+        init(runtime: SSHTerminalSession) {
             self.runtime = runtime
         }
     }

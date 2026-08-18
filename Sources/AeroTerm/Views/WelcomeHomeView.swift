@@ -6,7 +6,7 @@ public struct WelcomeHomeView: View {
     @ObservedObject var loc = LocalizationManager.shared
     @State private var searchText = ""
     @State private var hoverRecentID: UUID? = nil
-    @State private var isHoveringNewButton: Bool = false
+    @State private var isHoveringNewButton: Bool = false	
     @State private var isViewAppeared: Bool = false
 
     private var filteredRecents: [RecentConnection] {
@@ -23,8 +23,6 @@ public struct WelcomeHomeView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: 50)
-
             // 1. App Header Branding (入场微升淡入动画)
             HStack(spacing: 18) {
                 appRealIconView
@@ -173,7 +171,6 @@ public struct WelcomeHomeView: View {
             Spacer().frame(minHeight: 50)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             isViewAppeared = true
         }
@@ -253,7 +250,8 @@ public struct WelcomeHomeView: View {
                     host: item.host,
                     port: item.port,
                     title: item.title,
-                    username: item.username
+                    username: item.username,
+                    accountID: item.accountID
                 )
             }
         }
