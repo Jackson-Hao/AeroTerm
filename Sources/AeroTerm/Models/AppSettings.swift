@@ -3,6 +3,47 @@ import SwiftUI
 import CoreText
 import Combine
 
+public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
+    case system
+    case english = "en-US"
+    case japanese = "ja"
+    case french = "fr"
+    case german = "de"
+
+    public var id: String { rawValue }
+
+    public var titleKey: String {
+        switch self {
+        case .system: return "language_system"
+        case .english: return "language_english"
+        case .japanese: return "language_japanese"
+        case .french: return "language_french"
+        case .german: return "language_german"
+        }
+    }
+
+    public var lprojName: String {
+        switch self {
+        case .system: return Self.systemLprojName()
+        case .english: return "en-US"
+        case .japanese: return "ja"
+        case .french: return "fr"
+        case .german: return "de"
+        }
+    }
+
+    public static func systemLprojName() -> String {
+        for identifier in Locale.preferredLanguages {
+            let lowered = identifier.lowercased()
+            if lowered.hasPrefix("ja") { return "ja" }
+            if lowered.hasPrefix("fr") { return "fr" }
+            if lowered.hasPrefix("de") { return "de" }
+            if lowered.hasPrefix("en") { return "en-US" }
+        }
+        return "en-US"
+    }
+}
+
 public enum AppTheme: String, CaseIterable, Identifiable, Sendable {
     case system = "system"
     case dark = "dark"
@@ -64,6 +105,13 @@ public final class SettingsManager: ObservableObject {
         }
     }
 
+    @Published public var language: AppLanguage = .system {
+        didSet {
+            UserDefaults.standard.set(language.rawValue, forKey: languageDefaultsKey)
+            LocalizationManager.shared.apply(language)
+        }
+    }
+
     @Published public var isShowingSettingsSheet: Bool = false
 
     private init() {
@@ -99,6 +147,14 @@ public final class SettingsManager: ObservableObject {
         } else {
             self.terminalPaletteID = SerialColorScheme.followAppID
         }
+
+        if let savedLanguage = UserDefaults.standard.string(forKey: languageDefaultsKey),
+           let language = AppLanguage(rawValue: savedLanguage) {
+            self.language = language
+        } else {
+            self.language = .system
+        }
+        LocalizationManager.shared.apply(language)
     }
 
     private func registerCustomFonts() {

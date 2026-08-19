@@ -65,6 +65,13 @@ cat << PLIST_EOF > "${CONTENTS_DIR}/Info.plist"
 <dict>
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en-US</string>
+        <string>ja</string>
+        <string>fr</string>
+        <string>de</string>
+    </array>
     <key>CFBundleExecutable</key>
     <string>${APP_NAME}</string>
     <key>CFBundleIconFile</key>
@@ -78,9 +85,9 @@ cat << PLIST_EOF > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.0-0819</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>20260819</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>NSHighResolutionCapable</key>

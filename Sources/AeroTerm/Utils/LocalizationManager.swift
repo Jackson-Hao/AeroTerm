@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+let languageDefaultsKey = "AeroTerm.AppLanguage.v1"
+
 @MainActor
 public final class LocalizationManager: ObservableObject {
     public static let shared = LocalizationManager()
@@ -8,16 +10,12 @@ public final class LocalizationManager: ObservableObject {
     private var activeBundle: Bundle = Bundle.main
 
     private init() {
-        let baseBundle = Bundle.module
-        if let path = baseBundle.path(forResource: "en-US", ofType: "lproj"),
-           let bundle = Bundle(path: path) {
-            self.activeBundle = bundle
-        } else if let path = Bundle.main.path(forResource: "en-US", ofType: "lproj"),
-                  let bundle = Bundle(path: path) {
-            self.activeBundle = bundle
-        } else {
-            self.activeBundle = baseBundle
-        }
+        apply(savedLanguage())
+    }
+
+    public func apply(_ language: AppLanguage) {
+        activeBundle = Self.bundle(forLproj: language.lprojName)
+        objectWillChange.send()
     }
 
     public func text(_ key: String) -> String {
@@ -36,23 +34,49 @@ public final class LocalizationManager: ObservableObject {
         String(format: lookup(key), arguments: args)
     }
 
+    private func savedLanguage() -> AppLanguage {
+        if let raw = UserDefaults.standard.string(forKey: languageDefaultsKey),
+           let language = AppLanguage(rawValue: raw) {
+            return language
+        }
+        return .system
+    }
+
     nonisolated private static func resolvedBundle() -> Bundle {
-        let base = Bundle.module
-        if let path = base.path(forResource: "en-US", ofType: "lproj"),
-           let bundle = Bundle(path: path) {
-            return bundle
+        let language = AppLanguage(rawValue: UserDefaults.standard.string(forKey: languageDefaultsKey) ?? "") ?? .system
+        return bundle(forLproj: language.lprojName)
+    }
+
+    nonisolated private static func bundle(forLproj name: String) -> Bundle {
+        let candidates = [name, name.lowercased(), "en-US"]
+        for candidate in candidates {
+            if let path = Bundle.module.path(forResource: candidate, ofType: "lproj"),
+               let bundle = Bundle(path: path) {
+                return bundle
+            }
+            if let path = Bundle.main.path(forResource: candidate, ofType: "lproj"),
+               let bundle = Bundle(path: path) {
+                return bundle
+            }
         }
-        if let path = Bundle.main.path(forResource: "en-US", ofType: "lproj"),
-           let bundle = Bundle(path: path) {
-            return bundle
-        }
-        return base
+        return Bundle.module
     }
 
     nonisolated private static func lookup(_ key: String, in bundle: Bundle) -> String {
         let notFound = "__NOT_FOUND__"
         let localized = NSLocalizedString(key, bundle: bundle, value: notFound, comment: "")
-        return localized != notFound ? localized : key
+        if localized != notFound {
+            return localized
+        }
+        if bundle !== Bundle.module,
+           let path = Bundle.module.path(forResource: "en-US", ofType: "lproj"),
+           let english = Bundle(path: path) {
+            let fallback = NSLocalizedString(key, bundle: english, value: notFound, comment: "")
+            if fallback != notFound {
+                return fallback
+            }
+        }
+        return key
     }
 }
 

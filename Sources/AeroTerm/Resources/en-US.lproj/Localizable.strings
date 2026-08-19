@@ -2,7 +2,12 @@
 
 /* Branding & Welcome */
 "app_title" = "AeroTerm";
-"app_version" = "alpha-0818";
+"app_version" = "v1.0-0819";
+"language_system" = "System";
+"language_english" = "English";
+"language_japanese" = "日本語";
+"language_french" = "Français";
+"language_german" = "Deutsch";
 "app_subtitle" = "Lightweight Native SSH & Network Operations Workbench";
 "new_connection_btn" = "New Connection (Wizard)";
 "recent_connections" = "Recent Connections";

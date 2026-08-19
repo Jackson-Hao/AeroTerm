@@ -116,7 +116,7 @@ public struct XcodeStartupWindowView: View {
                     .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(.primary)
 
-                Text("Version alpha-0818")
+                Text(AppVersion.display)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }

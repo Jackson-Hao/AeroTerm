@@ -35,7 +35,7 @@ public struct WelcomeHomeView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(loc.text("app_title"))
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                        Text(loc.text("app_version"))
+                        Text(AppVersion.display)
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .foregroundColor(.secondary)
                     }

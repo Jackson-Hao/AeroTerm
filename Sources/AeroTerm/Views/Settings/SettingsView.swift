@@ -102,6 +102,27 @@ public struct SettingsView: View {
     // MARK: - 1. Appearance Section (预设主题选择)
     private var appearanceSection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label(loc.text("language_label"), systemImage: "globe")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Spacer()
+                Picker("", selection: $settings.language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(loc.text(language.titleKey)).tag(language)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 220)
+            }
+            .padding(14)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+            )
+
             Text("Theme Presets")
                 .font(.system(size: 13, weight: .bold))
 
@@ -272,7 +293,7 @@ public struct SettingsView: View {
                 VStack(spacing: 3) {
                     Text("AeroTerm")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
-                    Text("Version alpha-0818")
+                    Text(AppVersion.display)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
