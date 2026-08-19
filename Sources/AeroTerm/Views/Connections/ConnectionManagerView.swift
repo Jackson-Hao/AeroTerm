@@ -121,7 +121,10 @@ public struct ConnectionManagerView: View {
 
     private func subtitle(_ config: ConnectionConfig) -> String {
         if config.type == .serial {
-            return "\(config.port) bps"
+            let device = config.host.replacingOccurrences(of: "/dev/cu.", with: "")
+            let modeTitle = loc.text(config.serial.mode.titleKey)
+            let head = device.isEmpty ? modeTitle : "\(modeTitle) · \(device)"
+            return "\(head) @ \(config.port) \(config.serial.lineSpec)"
         }
         if config.type == .agentCLI {
             return config.host

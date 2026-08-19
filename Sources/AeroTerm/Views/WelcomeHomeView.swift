@@ -213,7 +213,7 @@ public struct WelcomeHomeView: View {
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundColor(.primary)
                     .lineLimit(1)
-                Text("\(item.host):\(item.port)")
+                Text(verbatim: "\(item.host):\(String(item.port))")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
             }

@@ -67,12 +67,17 @@ public struct ConnectionHUDView: View {
             }
             .frame(maxHeight: .infinity)
 
-            if hud.isFinished && !hud.didSucceed {
+            if !hud.isFinished || !hud.didSucceed {
                 Divider()
                 HStack {
                     Spacer()
-                    Button("Close") { onClose() }
-                        .keyboardShortcut(.cancelAction)
+                    if hud.isFinished {
+                        Button("Close") { onClose() }
+                            .keyboardShortcut(.cancelAction)
+                    } else {
+                        Button("Cancel") { onClose() }
+                            .keyboardShortcut(.cancelAction)
+                    }
                 }
                 .padding(12)
             }

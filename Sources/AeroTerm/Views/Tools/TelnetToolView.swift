@@ -10,9 +10,12 @@ public struct TelnetToolView: View {
     }
 
     public var body: some View {
-        if let runtime = sessionManager.telnetSessions[session.id] {
-            TelnetTerminalAttachView(runtime: runtime)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if let runtime = sessionManager.telnetSessions[session.id], runtime.isAlive {
+            VStack(spacing: 0) {
+                TerminalSessionChrome()
+                TelnetTerminalAttachView(runtime: runtime)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         } else {
             VStack(spacing: 10) {
                 Image(systemName: "network")
@@ -21,6 +24,10 @@ public struct TelnetToolView: View {
                 Text("Telnet session is not connected.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                Button(LocalizationManager.shared.text("ssh_reconnect")) {
+                    sessionManager.reconnect(session)
+                }
+                .buttonStyle(.borderedProminent)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -36,29 +43,25 @@ private struct TelnetTerminalAttachView: NSViewRepresentable {
         Coordinator(runtime: runtime)
     }
 
-    func makeNSView(context: Context) -> NSView {
-        let container = NSView(frame: .zero)
-        container.autoresizingMask = [.width, .height]
-        container.focusRingType = .none
-        container.wantsLayer = true
-        container.clipsToBounds = true
-        runtime.attach(to: container)
-        return container
+    func makeNSView(context: Context) -> TerminalHostView {
+        let host = TerminalHostView(frame: .zero)
+        runtime.attach(to: host)
+        return host
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    func updateNSView(_ nsView: TerminalHostView, context: Context) {
         runtime.applyTheme()
         runtime.attach(to: nsView)
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: TerminalHostView, context: Context) -> CGSize? {
         guard let width = proposal.width, let height = proposal.height,
               width.isFinite, height.isFinite, width > 0, height > 0
         else { return nil }
         return CGSize(width: width, height: height)
     }
 
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nsView: TerminalHostView, coordinator: Coordinator) {
         coordinator.runtime.detach(from: nsView)
     }
 

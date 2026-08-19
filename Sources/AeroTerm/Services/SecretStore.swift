@@ -21,7 +21,7 @@ public enum SSHAuthMethod: String, Codable, Sendable {
 public final class SecretStore {
     public static let shared = SecretStore()
 
-    public static var directoryURL: URL {
+    nonisolated public static var directoryURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/aero/aeroterm", isDirectory: true)
     }
@@ -64,8 +64,12 @@ public final class SecretStore {
 
     private func finishUnlock(_ data: Data) -> Bool {
         masterKey = SymmetricKey(data: data)
-        Self.writeMasterKeyFile(data)
+        Self.removeLegacyMasterKeyFile()
         db = Self.openDatabase()
+        guard db != nil else {
+            masterKey = nil
+            return false
+        }
         Self.createSchema(db)
         return true
     }
@@ -219,12 +223,9 @@ public final class SecretStore {
         directoryURL.appendingPathComponent("master.key")
     }
 
-    private static func writeMasterKeyFile(_ data: Data) {
-        try? data.write(to: masterKeyURL, options: .atomic)
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: masterKeyURL.path
-        )
+    /// Older builds wrote the AES key next to secrets.sqlite. The key lives in Keychain only.
+    private static func removeLegacyMasterKeyFile() {
+        try? FileManager.default.removeItem(at: masterKeyURL)
     }
 
     // MARK: - SQLite

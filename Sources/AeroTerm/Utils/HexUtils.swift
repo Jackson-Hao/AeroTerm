@@ -31,6 +31,23 @@ public struct HexUtils {
         return data
     }
 
+    /// Strip NULs and other C0 controls that crash SwiftUI `Text`.
+    public static func sanitizedText(_ string: String) -> String {
+        var scalars = String.UnicodeScalarView()
+        scalars.reserveCapacity(string.unicodeScalars.count)
+        for scalar in string.unicodeScalars {
+            switch scalar.value {
+            case 0x00:
+                scalars.append("\u{00B7}")
+            case 0x01...0x08, 0x0B, 0x0C, 0x0E...0x1F, 0x7F:
+                continue
+            default:
+                scalars.append(scalar)
+            }
+        }
+        return String(scalars)
+    }
+
     /// Format byte size into human readable string (e.g. 1.2 KB, 3.4 MB)
     public static func formatByteCount(_ count: Int) -> String {
         let formatter = ByteCountFormatter()

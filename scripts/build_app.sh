@@ -10,6 +10,7 @@ echo "🚀 正在构建 ${APP_NAME} (${BUILD_CONFIG})..."
 echo "=================================================="
 
 cd "${PROJECT_ROOT}"
+"${PROJECT_ROOT}/scripts/patch_deps.sh"
 swift build -c "${BUILD_CONFIG}"
 
 # 编译成功后自动打包 .app

@@ -107,6 +107,10 @@ final class AeroTermAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        SessionManager.shared.closeAllSessions()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard SessionManager.shared.isVaultReady else {
             for window in NSApp.windows {

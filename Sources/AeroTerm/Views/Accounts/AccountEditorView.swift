@@ -166,29 +166,61 @@ public struct AccountEditorView: View {
             authMethod: method,
             privateKeyPath: kind.usesPrivateKey ? privateKeyPath : ""
         )
+        guard writeSecrets(for: account) else { return }
         sessionManager.upsertAccount(account)
-        writeSecrets(for: account)
         errorText = nil
         onSave?(account)
     }
 
-    private func writeSecrets(for account: AuthAccount) {
+    private func writeSecrets(for account: AuthAccount) -> Bool {
         if account.authMethod == .password {
             if !password.isEmpty {
                 SecretStore.shared.set(.password, accountID: account.id, plaintext: password)
             }
+            guard SecretStore.shared.get(.password, accountID: account.id) != nil || !account.kind.requiresSecret else {
+                errorText = loc.text("ssh_credentials_required")
+                return false
+            }
             SecretStore.shared.delete(.privateKey, accountID: account.id)
             SecretStore.shared.delete(.keyPassphrase, accountID: account.id)
-        } else {
-            let expanded = (privateKeyPath as NSString).expandingTildeInPath
-            if !expanded.isEmpty, let pem = try? String(contentsOfFile: expanded, encoding: .utf8), !pem.isEmpty {
-                SecretStore.shared.set(.privateKey, accountID: account.id, plaintext: pem)
-            }
-            if !keyPassphrase.isEmpty {
-                SecretStore.shared.set(.keyPassphrase, accountID: account.id, plaintext: keyPassphrase)
-            }
-            SecretStore.shared.delete(.password, accountID: account.id)
+            return true
         }
+
+        let expanded = (privateKeyPath as NSString).expandingTildeInPath
+        var pem = SecretStore.shared.get(.privateKey, accountID: account.id)
+        if !expanded.isEmpty {
+            guard let loaded = try? String(contentsOfFile: expanded, encoding: .utf8), !loaded.isEmpty else {
+                errorText = loc.text("account_key_unreadable")
+                return false
+            }
+            let passphrase = keyPassphrase.isEmpty
+                ? SecretStore.shared.get(.keyPassphrase, accountID: account.id)
+                : keyPassphrase
+            do {
+                _ = try SSHAuthBuilder.makeMethod(
+                    username: account.username,
+                    password: nil,
+                    privateKeyPEM: loaded,
+                    keyPassphrase: passphrase
+                )
+            } catch {
+                errorText = error.localizedDescription
+                return false
+            }
+            SecretStore.shared.set(.privateKey, accountID: account.id, plaintext: loaded)
+            pem = loaded
+        }
+        guard pem != nil else {
+            errorText = loc.text("ssh_credentials_required")
+            return false
+        }
+        if !keyPassphrase.isEmpty {
+            SecretStore.shared.set(.keyPassphrase, accountID: account.id, plaintext: keyPassphrase)
+        } else if !expanded.isEmpty {
+            SecretStore.shared.delete(.keyPassphrase, accountID: account.id)
+        }
+        SecretStore.shared.delete(.password, accountID: account.id)
+        return true
     }
 
     private func browsePrivateKey() {

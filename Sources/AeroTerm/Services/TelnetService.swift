@@ -105,12 +105,20 @@ public final class TelnetTerminalSession: ObservableObject {
     }
 
     public func attach(to container: NSView) {
-        TerminalAppearance.paintContainer(container)
-        terminalView.pinFilling(container)
+        if let host = container as? TerminalHostView {
+            host.install(terminalView)
+        } else {
+            TerminalAppearance.paintContainer(container)
+            terminalView.pinFilling(container)
+        }
         applyTheme()
     }
 
     public func detach(from container: NSView) {
+        if let host = container as? TerminalHostView {
+            host.uninstall(terminalView)
+            return
+        }
         if terminalView.superview === container {
             terminalView.removeFromSuperview()
         }
@@ -132,17 +140,13 @@ public final class TelnetTerminalSession: ObservableObject {
     }
 
     private func startKeepAlive() {
-        let sessionID = self.sessionID
         engine.keepAliveTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: SSHKeepAlive.intervalNanoseconds)
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
                 if !self.engine.isConnected {
-                    await MainActor.run {
-                        self.handleDisconnect()
-                        SessionManager.shared.closeSession(id: sessionID)
-                    }
+                    await MainActor.run { self.handleDisconnect() }
                     return
                 }
                 self.engine.sendKeepAlive()
@@ -260,7 +264,7 @@ final class TelnetIOEngine: TerminalViewDelegate, @unchecked Sendable {
         isConnected = false
         let id = sessionID
         DispatchQueue.main.async {
-            SessionManager.shared.closeSession(id: id)
+            SessionManager.shared.telnetSessions[id]?.handleDisconnect()
         }
     }
 

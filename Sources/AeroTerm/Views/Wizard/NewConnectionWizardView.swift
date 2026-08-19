@@ -16,6 +16,9 @@ public struct NewConnectionWizardView: View {
     @State private var connectionName = ""
     @State private var host = "127.0.0.1"
     @State private var portString = "22"
+    @State private var localPortString = "0"
+    @State private var udpMode: UDPMode = .unicast
+    @State private var httpLabel = ""
     @State private var username = ""
     @State private var password = ""
     @State private var selectedAccountID: UUID?
@@ -28,6 +31,8 @@ public struct NewConnectionWizardView: View {
     // Serial Specific
     @State private var selectedSerialPort = ""
     @State private var selectedBaudRate = 115200
+    @State private var serialSettings = SerialSettings.wizardDefault
+    @State private var desktopSettings = DesktopDisplaySettings.default
     @State private var availablePorts: [SerialPortInfo] = []
 
     // Agent CLI Specific
@@ -379,14 +384,27 @@ public struct NewConnectionWizardView: View {
             if connectionName.isEmpty, let agent = selectedAgentCLI {
                 connectionName = agent.name
             }
+        } else if selectedType == .httpClient {
+            if connectionName.isEmpty {
+                connectionName = selectedType.rawValue
+            }
         } else if selectedType == .serial {
             availablePorts = SerialEngine.getAvailablePorts()
-            if let first = availablePorts.first {
+            if selectedSerialPort.isEmpty, let first = availablePorts.first {
                 selectedSerialPort = first.path
             }
-            connectionName = "Serial - \(selectedSerialPort.replacingOccurrences(of: "/dev/cu.", with: ""))"
+            let short = selectedSerialPort.replacingOccurrences(of: "/dev/cu.", with: "")
+            connectionName = short.isEmpty ? "Serial" : "Serial - \(short)"
         } else {
             portString = "\(selectedType.defaultPort)"
+            if selectedType == .udpTool {
+                localPortString = portString
+                applyUDPHostPlaceholder(udpMode)
+            }
+            if selectedType == .httpServer {
+                localPortString = "\(selectedType.defaultPort)"
+                host = "0.0.0.0"
+            }
             connectionName = "\(selectedType.rawValue) - \(host)"
         }
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -409,6 +427,8 @@ public struct NewConnectionWizardView: View {
                     agentCLIFormSection
                 } else if selectedType == .serial {
                     serialFormSection
+                } else if selectedType == .httpClient {
+                    httpClientFormSection
                 } else {
                     networkFormSection
                 }
@@ -417,9 +437,11 @@ public struct NewConnectionWizardView: View {
 
                 Toggle(loc.text("save_to_saved_connections"), isOn: $saveToFavorites)
                     .font(.system(size: 12))
-                Text(loc.text("verify_then_save_hint"))
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                if selectedType != .httpClient {
+                    Text(loc.text("verify_then_save_hint"))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
             }
             .padding(24)
         }
@@ -496,6 +518,18 @@ public struct NewConnectionWizardView: View {
         }
     }
 
+    private var httpClientFormSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(loc.text("group_label"))
+                .font(.system(size: 12, weight: .semibold))
+            TextField(loc.text("http_label_placeholder"), text: $httpLabel)
+                .textFieldStyle(.roundedBorder)
+            Text(loc.text("http_label_hint"))
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+    }
+
     private var networkFormSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 16) {
@@ -513,10 +547,40 @@ public struct NewConnectionWizardView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 100)
                 }
+
+                if selectedType == .tcpClient || selectedType == .udpTool || selectedType == .httpServer {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(loc.text("tcp_local_port"))
+                            .font(.system(size: 12, weight: .semibold))
+                        TextField(loc.text("tcp_local_port_placeholder"), text: $localPortString)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                    }
+                }
+            }
+
+            if selectedType == .udpTool {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(loc.text("udp_mode"))
+                        .font(.system(size: 12, weight: .semibold))
+                    Picker("", selection: $udpMode) {
+                        ForEach(UDPMode.allCases) { item in
+                            Text(item.title).tag(item)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: udpMode) { _, newMode in
+                        applyUDPHostPlaceholder(newMode)
+                    }
+                }
             }
 
             if selectedType.usesAccountPicker {
                 remoteAccountPicker
+            }
+
+            if selectedType == .vnc || selectedType == .rdp {
+                DesktopDisplaySettingsForm(settings: $desktopSettings)
             }
         }
     }
@@ -570,36 +634,18 @@ public struct NewConnectionWizardView: View {
     }
 
     private var serialFormSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(loc.text("serial_port_label"))
-                    .font(.system(size: 12, weight: .semibold))
-                if availablePorts.isEmpty {
-                    Text(loc.text("no_serial_port_detected"))
-                        .font(.system(size: 12))
-                        .foregroundColor(.red)
-                } else {
-                    Picker("", selection: $selectedSerialPort) {
-                        ForEach(availablePorts, id: \.path) { port in
-                            Text("\(port.name) (\(port.path))").tag(port.path)
-                        }
-                    }
-                    .pickerStyle(.menu)
+        SerialSettingsForm(
+            devicePath: $selectedSerialPort,
+            baudRate: $selectedBaudRate,
+            settings: $serialSettings,
+            availablePorts: availablePorts,
+            onRefresh: {
+                availablePorts = SerialEngine.getAvailablePorts()
+                if selectedSerialPort.isEmpty, let first = availablePorts.first {
+                    selectedSerialPort = first.path
                 }
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(loc.text("baud_rate_label"))
-                    .font(.system(size: 12, weight: .semibold))
-                Picker("", selection: $selectedBaudRate) {
-                    ForEach([9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600], id: \.self) { rate in
-                        Text("\(rate)").tag(rate)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 160)
-            }
-        }
+        )
     }
 
     private func browseDirectory() {
@@ -656,24 +702,33 @@ public struct NewConnectionWizardView: View {
         let launchedFromSplash = sessionManager.isShowingStartupSplash
         let portInt = Int(portString) ?? selectedType.defaultPort
 
+        if selectedType == .httpClient {
+            let name = connectionName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let config = ConnectionConfig(
+                name: name.isEmpty ? selectedType.rawValue : name,
+                type: .httpClient,
+                host: "",
+                port: 0,
+                label: httpLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            let opened = sessionManager.openFromConfig(config)
+            guard opened else { return }
+            if saveToFavorites {
+                sessionManager.saveConnection(config, connectImmediately: false)
+            }
+            finishConnect(launchedFromSplash: launchedFromSplash)
+            return
+        }
+
         if selectedType == .agentCLI {
             let displayTitle = connectionName.isEmpty ? (selectedAgentCLI?.name ?? "Agent CLI") : connectionName
-            let session = SessionItem(
+            sessionManager.openAgentCLI(
                 title: displayTitle,
-                subtitle: "\(agentCommand) \(agentArgs)",
-                type: .agentCLI,
-                isConnected: true,
-                host: agentCommand,
-                port: 0,
-                targetDevice: agentWorkDir,
-                customCommand: agentArgs,
+                command: agentCommand,
+                arguments: agentArgs,
                 workingDirectory: agentWorkDir,
-                environmentVariables: agentEnvValues
+                environment: agentEnvValues
             )
-
-            sessionManager.sessions.append(session)
-            sessionManager.activeSessionID = session.id
-            sessionManager.addRecent(RecentConnection(title: displayTitle, type: .agentCLI, host: agentCommand, port: 0))
             if saveToFavorites {
                 let config = ConnectionConfig(
                     name: displayTitle,
@@ -704,18 +759,31 @@ public struct NewConnectionWizardView: View {
                 port: portInt,
                 username: account.username,
                 authMethod: account.authMethod,
-                accountID: account.id
+                accountID: account.id,
+                desktop: (selectedType == .vnc || selectedType == .rdp) ? desktopSettings : .default
             )
             sessionManager.beginRemoteConnect(config, saveOnSuccess: saveToFavorites)
             return
         }
 
+        let serialName: String
+        if selectedType == .serial {
+            let short = selectedSerialPort.replacingOccurrences(of: "/dev/cu.", with: "")
+            serialName = short.isEmpty ? "Serial" : "Serial - \(short)"
+        } else {
+            serialName = "\(selectedType.rawValue) - \(host)"
+        }
         let config = ConnectionConfig(
-            name: connectionName.isEmpty ? "\(selectedType.rawValue) - \(host)" : connectionName,
+            name: connectionName.isEmpty ? serialName : connectionName,
             type: selectedType,
             host: selectedType == .serial ? selectedSerialPort : host,
             port: selectedType == .serial ? selectedBaudRate : portInt,
-            username: username
+            localPort: (selectedType == .tcpClient || selectedType == .udpTool || selectedType == .httpServer)
+                ? (Int(localPortString) ?? selectedType.defaultPort)
+                : 0,
+            udpMode: selectedType == .udpTool ? udpMode : .unicast,
+            username: username,
+            serial: selectedType == .serial ? serialSettings : .default
         )
 
         let opened = sessionManager.openFromConfig(config)
@@ -724,6 +792,19 @@ public struct NewConnectionWizardView: View {
             sessionManager.saveConnection(config, connectImmediately: false)
         }
         finishConnect(launchedFromSplash: launchedFromSplash)
+    }
+
+    private func applyUDPHostPlaceholder(_ mode: UDPMode) {
+        switch mode {
+        case .unicast:
+            if host == "239.255.0.1" || host == "255.255.255.255" {
+                host = "127.0.0.1"
+            }
+        case .multicast:
+            host = "239.255.0.1"
+        case .broadcast:
+            host = "255.255.255.255"
+        }
     }
 
     private func finishConnect(launchedFromSplash: Bool) {

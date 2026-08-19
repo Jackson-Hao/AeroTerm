@@ -4,14 +4,18 @@ import SwiftTerm
 
 @MainActor
 enum TerminalAppearance {
+    static var activePalette: SerialColorScheme {
+        SerialColorScheme.named(SettingsManager.shared.terminalPaletteID)
+    }
+
     static var signature: String {
         let theme = ThemeManager.shared.currentTheme
         let settings = SettingsManager.shared
-        return "\(theme.id)|\(settings.terminalFontName)|\(settings.terminalFontSize)"
+        return "\(theme.id)|\(settings.terminalPaletteID)|\(settings.terminalFontName)|\(settings.terminalFontSize)"
     }
 
     static var backgroundColor: NSColor {
-        NSColor(ThemeManager.shared.currentTheme.bg)
+        activePalette.resolvedBackground
     }
 
     static func resolvedFont() -> NSFont {
@@ -25,18 +29,11 @@ enum TerminalAppearance {
         let next = signature
         guard next != lastSignature else { return false }
         lastSignature = next
-        let theme = ThemeManager.shared.currentTheme
-        terminalView.focusRingType = .none
-        terminalView.disableFullRedrawOnAnyChanges = true
-        terminalView.nativeBackgroundColor = NSColor(theme.bg)
-        terminalView.nativeForegroundColor = NSColor(theme.textPrimary)
-        terminalView.caretColor = NSColor(theme.accent)
-        terminalView.font = resolvedFont()
+        activePalette.apply(to: terminalView)
         return true
     }
 
     static func paintContainer(_ container: NSView) {
-        container.wantsLayer = true
-        container.layer?.backgroundColor = backgroundColor.cgColor
+        activePalette.paint(container)
     }
 }

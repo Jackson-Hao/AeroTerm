@@ -5,7 +5,7 @@ import Foundation
 public final class ConfigStore {
     public static let shared = ConfigStore()
 
-    public static var directoryURL: URL { SecretStore.directoryURL }
+    nonisolated public static var directoryURL: URL { SecretStore.directoryURL }
 
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()

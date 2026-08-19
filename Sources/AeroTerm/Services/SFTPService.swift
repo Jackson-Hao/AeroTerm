@@ -237,23 +237,22 @@ public final class SFTPBrowserSession: ObservableObject {
 
     public func navigate(to path: String, recordHistory: Bool = true) {
         let target = path.isEmpty ? "/" : path
-        guard target != currentPath else {
+        if target == currentPath {
             Task { await listCurrent() }
             return
         }
-        if recordHistory, !currentPath.isEmpty {
-            pathHistory.append(currentPath)
-        }
-        currentPath = target
-        canGoBack = !pathHistory.isEmpty
-        Task { await listCurrent() }
+        Task { await listAndCommit(target, recordHistory: recordHistory) }
     }
 
     public func goBack() {
-        guard let previous = pathHistory.popLast() else { return }
-        canGoBack = !pathHistory.isEmpty
-        currentPath = previous
-        Task { await listCurrent() }
+        guard let previous = pathHistory.last else { return }
+        Task {
+            let ok = await listAndCommit(previous, recordHistory: false)
+            if ok {
+                _ = pathHistory.popLast()
+                canGoBack = !pathHistory.isEmpty
+            }
+        }
     }
 
     public func goUp() {
@@ -271,7 +270,7 @@ public final class SFTPBrowserSession: ObservableObject {
 
     public func createFolder(named rawName: String) {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, !name.contains("/") else {
+        guard Self.isSafeName(name) else {
             errorMessage = LocalizationManager.shared.text("sftp_invalid_name")
             return
         }
@@ -291,7 +290,7 @@ public final class SFTPBrowserSession: ObservableObject {
 
     public func rename(_ entry: SFTPRemoteEntry, to rawName: String) {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, !name.contains("/"), name != entry.name else {
+        guard Self.isSafeName(name), name != entry.name else {
             if name != entry.name {
                 errorMessage = LocalizationManager.shared.text("sftp_invalid_name")
             }
@@ -346,7 +345,7 @@ public final class SFTPBrowserSession: ObservableObject {
             panel.prompt = LocalizationManager.shared.text("sftp_save")
             guard panel.runModal() == .OK, let dest = panel.url else { return }
             beginTransfer {
-                try await self.downloadFile(items[0], to: dest)
+                try await self.downloadFile(items[0], to: dest, fileIndex: 1, fileCount: 1)
             }
             return
         }
@@ -359,12 +358,21 @@ public final class SFTPBrowserSession: ObservableObject {
         panel.prompt = LocalizationManager.shared.text("sftp_save")
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         beginTransfer {
+            var index = 0
+            let fileCount = max(items.filter { !$0.isDirectory }.count, items.count)
             for item in items {
+                try Task.checkCancellation()
+                index += 1
                 if item.isDirectory {
                     let dest = folder.appendingPathComponent(item.name, isDirectory: true)
-                    try await self.downloadDirectory(item, to: dest)
+                    try await self.downloadDirectory(item, to: dest, fileIndex: index, fileCount: fileCount)
                 } else {
-                    try await self.downloadFile(item, to: folder.appendingPathComponent(item.name))
+                    try await self.downloadFile(
+                        item,
+                        to: folder.appendingPathComponent(item.name),
+                        fileIndex: index,
+                        fileCount: fileCount
+                    )
                 }
             }
         }
@@ -416,21 +424,26 @@ public final class SFTPBrowserSession: ObservableObject {
         }
     }
 
+    private static func isSafeName(_ name: String) -> Bool {
+        !name.isEmpty && !name.contains("/") && name != "." && name != ".."
+    }
+
     private func resolveHomeAndList() async {
         isBusy = true
         defer { isBusy = false }
         do {
             let home = try await sftp.getRealPath(atPath: ".")
-            currentPath = home.isEmpty ? "/" : home
-            await listCurrent()
+            _ = await listAndCommit(home.isEmpty ? "/" : home, recordHistory: false)
         } catch {
-            currentPath = "/"
-            errorMessage = error.localizedDescription
+            _ = await listAndCommit("/", recordHistory: false)
+            if entries.isEmpty {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
-    private func listCurrent() async {
-        let path = currentPath.isEmpty ? "." : currentPath
+    @discardableResult
+    private func listAndCommit(_ path: String, recordHistory: Bool) async -> Bool {
         listGeneration += 1
         let generation = listGeneration
         isBusy = true
@@ -440,39 +453,53 @@ public final class SFTPBrowserSession: ObservableObject {
             }
         }
         do {
-            let names = try await sftp.listDirectory(atPath: path)
-            guard generation == listGeneration else { return }
-            let listed = names.flatMap(\.components)
-                .filter { $0.filename != "." && $0.filename != ".." }
-                .map { component in
-                    SFTPRemoteEntry(
-                        name: component.filename,
-                        path: SFTPPath.join(path == "." ? "/" : path, component.filename),
-                        kind: SFTPFileType.kind(attributes: component.attributes, longname: component.longname),
-                        size: component.attributes.size,
-                        modified: component.attributes.accessModificationTime?.modificationTime,
-                        permissions: component.attributes.permissions,
-                        longname: component.longname
-                    )
-                }
-                .sorted { lhs, rhs in
-                    if lhs.isDirectory != rhs.isDirectory {
-                        return lhs.isDirectory
-                    }
-                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-                }
+            let listed = try await fetchEntries(path)
+            guard generation == listGeneration else { return false }
+            if recordHistory, !currentPath.isEmpty, currentPath != path {
+                pathHistory.append(currentPath)
+            }
+            currentPath = path
             entries = listed
-            if errorMessage == nil {
-                statusMessage = String(
-                    format: LocalizationManager.shared.text("sftp_item_count"),
-                    listed.count
+            canGoBack = !pathHistory.isEmpty
+            errorMessage = nil
+            statusMessage = String(
+                format: LocalizationManager.shared.text("sftp_item_count"),
+                listed.count
+            )
+            return true
+        } catch {
+            guard generation == listGeneration else { return false }
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func listCurrent() async {
+        let path = currentPath.isEmpty ? "/" : currentPath
+        _ = await listAndCommit(path, recordHistory: false)
+    }
+
+    private func fetchEntries(_ path: String) async throws -> [SFTPRemoteEntry] {
+        let names = try await sftp.listDirectory(atPath: path)
+        return names.flatMap(\.components)
+            .filter { Self.isSafeName($0.filename) }
+            .map { component in
+                SFTPRemoteEntry(
+                    name: component.filename,
+                    path: SFTPPath.join(path == "." ? "/" : path, component.filename),
+                    kind: SFTPFileType.kind(attributes: component.attributes, longname: component.longname),
+                    size: component.attributes.size,
+                    modified: component.attributes.accessModificationTime?.modificationTime,
+                    permissions: component.attributes.permissions,
+                    longname: component.longname
                 )
             }
-        } catch {
-            guard generation == listGeneration else { return }
-            entries = []
-            errorMessage = error.localizedDescription
-        }
+            .sorted { lhs, rhs in
+                if lhs.isDirectory != rhs.isDirectory {
+                    return lhs.isDirectory
+                }
+                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            }
     }
 
     private func beginTransfer(_ work: @escaping @MainActor () async throws -> Void) {
@@ -557,7 +584,7 @@ public final class SFTPBrowserSession: ObservableObject {
             try await sftp.createDirectory(atPath: path)
         } catch {
             if let attributes = try? await sftp.getAttributes(at: path),
-               SFTPFileType.kind(attributes: attributes, longname: "d") == .directory {
+               SFTPFileType.kind(attributes: attributes, longname: "") == .directory {
                 return
             }
             throw error
@@ -591,63 +618,76 @@ public final class SFTPBrowserSession: ObservableObject {
         }
     }
 
-    private func downloadFile(_ entry: SFTPRemoteEntry, to dest: URL) async throws {
-        if FileManager.default.fileExists(atPath: dest.path) {
-            try FileManager.default.removeItem(at: dest)
+    private func downloadFile(
+        _ entry: SFTPRemoteEntry,
+        to dest: URL,
+        fileIndex: Int,
+        fileCount: Int
+    ) async throws {
+        let temp = dest.appendingPathExtension("aeroterm-partial")
+        if FileManager.default.fileExists(atPath: temp.path) {
+            try FileManager.default.removeItem(at: temp)
         }
-        FileManager.default.createFile(atPath: dest.path, contents: nil)
-        let writer = FileHandleBox(try FileHandle(forWritingTo: dest))
-        defer { writer.close() }
+        FileManager.default.createFile(atPath: temp.path, contents: nil)
+        let writer = FileHandleBox(try FileHandle(forWritingTo: temp))
+        do {
+            transfer = SFTPTransferProgress(
+                fileName: entry.name,
+                direction: .download,
+                completedBytes: 0,
+                totalBytes: Int64(entry.size ?? 0),
+                fileIndex: fileIndex,
+                fileCount: fileCount
+            )
 
-        transfer = SFTPTransferProgress(
-            fileName: entry.name,
-            direction: .download,
-            completedBytes: 0,
-            totalBytes: Int64(entry.size ?? 0),
-            fileIndex: 1,
-            fileCount: 1
-        )
-
-        try await sftp.withFile(filePath: entry.path, flags: .read) { file in
-            var offset: UInt64 = 0
-            while true {
-                try Task.checkCancellation()
-                var buffer = try await file.read(from: offset, length: UInt32(sftpChunkSize))
-                let count = buffer.readableBytes
-                if count == 0 { break }
-                if let data = buffer.readData(length: count) {
-                    try writer.handle.write(contentsOf: data)
-                }
-                offset += UInt64(count)
-                await MainActor.run {
-                    self.transfer?.completedBytes = Int64(offset)
-                    if let size = entry.size {
-                        self.transfer?.totalBytes = Int64(size)
+            try await sftp.withFile(filePath: entry.path, flags: .read) { file in
+                var offset: UInt64 = 0
+                while true {
+                    try Task.checkCancellation()
+                    var buffer = try await file.read(from: offset, length: UInt32(sftpChunkSize))
+                    let count = buffer.readableBytes
+                    if count == 0 { break }
+                    if let data = buffer.readData(length: count) {
+                        try writer.handle.write(contentsOf: data)
+                    }
+                    offset += UInt64(count)
+                    await MainActor.run {
+                        self.transfer?.completedBytes = Int64(offset)
+                        if let size = entry.size {
+                            self.transfer?.totalBytes = Int64(size)
+                        }
                     }
                 }
             }
+            writer.close()
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try FileManager.default.removeItem(at: dest)
+            }
+            try FileManager.default.moveItem(at: temp, to: dest)
+        } catch {
+            writer.close()
+            try? FileManager.default.removeItem(at: temp)
+            throw error
         }
     }
 
-    private func downloadDirectory(_ entry: SFTPRemoteEntry, to dest: URL) async throws {
+    private func downloadDirectory(
+        _ entry: SFTPRemoteEntry,
+        to dest: URL,
+        fileIndex: Int,
+        fileCount: Int
+    ) async throws {
         try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
-        let names = try await sftp.listDirectory(atPath: entry.path)
-        let children = names.flatMap(\.components).filter { $0.filename != "." && $0.filename != ".." }
-        for component in children {
-            let child = SFTPRemoteEntry(
-                name: component.filename,
-                path: SFTPPath.join(entry.path, component.filename),
-                kind: SFTPFileType.kind(attributes: component.attributes, longname: component.longname),
-                size: component.attributes.size,
-                modified: component.attributes.accessModificationTime?.modificationTime,
-                permissions: component.attributes.permissions,
-                longname: component.longname
-            )
+        let children = try await fetchEntries(entry.path)
+        var index = fileIndex
+        for child in children {
+            try Task.checkCancellation()
             let childDest = dest.appendingPathComponent(child.name, isDirectory: child.isDirectory)
             if child.isDirectory {
-                try await downloadDirectory(child, to: childDest)
+                try await downloadDirectory(child, to: childDest, fileIndex: index, fileCount: fileCount)
             } else {
-                try await downloadFile(child, to: childDest)
+                try await downloadFile(child, to: childDest, fileIndex: index, fileCount: fileCount)
+                index += 1
             }
         }
     }

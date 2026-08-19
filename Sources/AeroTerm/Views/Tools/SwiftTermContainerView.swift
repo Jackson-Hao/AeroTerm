@@ -92,9 +92,13 @@ public struct SwiftTermContainerView: NSViewRepresentable {
             shellArgs = ["-l", "-i", "-c", combined]
         }
 
-        // 切换当前进程工作目录并启动 SwiftTerm 内核 PTY 进程
-        FileManager.default.changeCurrentDirectoryPath(expandedDir)
-        terminalView.startProcess(executable: shell, args: shellArgs, environment: envArray, execName: shell)
+        terminalView.startProcess(
+            executable: shell,
+            args: shellArgs,
+            environment: envArray,
+            execName: shell,
+            currentDirectory: expandedDir
+        )
         
         return terminalView
     }

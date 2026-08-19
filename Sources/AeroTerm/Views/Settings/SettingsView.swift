@@ -197,6 +197,16 @@ public struct SettingsView: View {
                 Divider()
 
                 HStack {
+                    Label(loc.text("serial_palette_label"), systemImage: "paintpalette")
+                        .font(.system(size: 12.5))
+                    Spacer()
+                    TerminalPalettePicker(paletteID: $settings.terminalPaletteID)
+                        .frame(width: 220)
+                }
+
+                Divider()
+
+                HStack {
                     Label("\(loc.text("font_size_label")): \(Int(settings.terminalFontSize)) pt", systemImage: "textformat.size")
                         .font(.system(size: 12.5))
                     Spacer()

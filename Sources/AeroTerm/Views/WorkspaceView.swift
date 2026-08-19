@@ -8,10 +8,6 @@ public struct WorkspaceView: View {
         sessionManager.primarySurface
     }
 
-    private var keepAliveSessions: [SessionItem] {
-        sessionManager.sessions.filter { sessionManager.needsOffscreenKeepAlive($0) }
-    }
-
     public var body: some View {
         ZStack {
             if let layout = primary.layout {
@@ -25,15 +21,6 @@ public struct WorkspaceView: View {
                 WelcomeHomeView()
                 WorkspaceDropCatcher(surfaceID: primary.id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .background {
-            ForEach(keepAliveSessions) { session in
-                SessionContentView(session: session)
-                    .frame(width: 1, height: 1)
-                    .opacity(0)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
             }
         }
         .focusEffectDisabled()

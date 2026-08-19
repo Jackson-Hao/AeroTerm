@@ -27,6 +27,7 @@ public final class ConnectionHUDState: ObservableObject {
     @Published public var lines: [ConnectionLogLine] = []
     @Published public var isFinished: Bool = false
     @Published public var didSucceed: Bool = false
+    @Published public var isCancelled: Bool = false
 
     public init(title: String, subtitle: String) {
         self.title = title

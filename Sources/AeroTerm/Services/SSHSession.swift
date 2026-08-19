@@ -45,12 +45,20 @@ public final class SSHTerminalSession: ObservableObject {
     }
 
     public func attach(to container: NSView) {
-        TerminalAppearance.paintContainer(container)
-        terminalView.pinFilling(container)
+        if let host = container as? TerminalHostView {
+            host.install(terminalView)
+        } else {
+            TerminalAppearance.paintContainer(container)
+            terminalView.pinFilling(container)
+        }
         applyTheme()
     }
 
     public func detach(from container: NSView) {
+        if let host = container as? TerminalHostView {
+            host.uninstall(terminalView)
+            return
+        }
         if terminalView.superview === container {
             terminalView.removeFromSuperview()
         }
@@ -74,29 +82,13 @@ public final class SSHTerminalSession: ObservableObject {
 
     private func startKeepAlive() {
         let client = self.client
-        let sessionID = self.sessionID
         engine.keepAliveTask = Task { [weak self] in
-            var execRejected = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: SSHKeepAlive.intervalNanoseconds)
                 guard !Task.isCancelled else { return }
                 if !client.isConnected {
                     await MainActor.run { self?.handleDisconnect() }
                     return
-                }
-                if execRejected >= 2 { continue }
-                do {
-                    _ = try await client.executeCommand("true", maxResponseSize: 32)
-                    execRejected = 0
-                } catch {
-                    if !client.isConnected {
-                        await MainActor.run {
-                            self?.handleDisconnect()
-                            SessionManager.shared.closeSession(id: sessionID)
-                        }
-                        return
-                    }
-                    execRejected += 1
                 }
             }
         }
@@ -202,10 +194,10 @@ final class SSHPTYEngine: TerminalViewDelegate, @unchecked Sendable {
         }
 
         let id = sessionID
-        let shouldClose = !finished
+        let shouldMarkDisconnected = !finished
         await MainActor.run {
-            if shouldClose {
-                SessionManager.shared.closeSession(id: id)
+            if shouldMarkDisconnected {
+                SessionManager.shared.sshSessions[id]?.handleDisconnect()
             }
         }
     }

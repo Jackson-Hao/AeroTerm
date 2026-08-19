@@ -21,9 +21,38 @@ public final class LocalizationManager: ObservableObject {
     }
 
     public func text(_ key: String) -> String {
+        Self.lookup(key, in: activeBundle)
+    }
+
+    public func format(_ key: String, _ args: CVarArg...) -> String {
+        String(format: text(key), arguments: args)
+    }
+
+    nonisolated public static func lookup(_ key: String) -> String {
+        lookup(key, in: resolvedBundle())
+    }
+
+    nonisolated public static func format(_ key: String, _ args: CVarArg...) -> String {
+        String(format: lookup(key), arguments: args)
+    }
+
+    nonisolated private static func resolvedBundle() -> Bundle {
+        let base = Bundle.module
+        if let path = base.path(forResource: "en-US", ofType: "lproj"),
+           let bundle = Bundle(path: path) {
+            return bundle
+        }
+        if let path = Bundle.main.path(forResource: "en-US", ofType: "lproj"),
+           let bundle = Bundle(path: path) {
+            return bundle
+        }
+        return base
+    }
+
+    nonisolated private static func lookup(_ key: String, in bundle: Bundle) -> String {
         let notFound = "__NOT_FOUND__"
-        let localized = NSLocalizedString(key, bundle: activeBundle, value: notFound, comment: "")
-        return (localized != notFound) ? localized : key
+        let localized = NSLocalizedString(key, bundle: bundle, value: notFound, comment: "")
+        return localized != notFound ? localized : key
     }
 }
 

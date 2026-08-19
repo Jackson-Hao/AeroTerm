@@ -13,7 +13,7 @@ public struct SFTPToolView: View {
 
     public var body: some View {
         Group {
-            if let browser = sessionManager.sftpSessions[session.id] {
+            if let browser = sessionManager.sftpSessions[session.id], browser.isAlive {
                 SFTPBrowserView(browser: browser, subtitle: session.subtitle)
                     .id(ObjectIdentifier(browser))
             } else {
@@ -24,6 +24,10 @@ public struct SFTPToolView: View {
                     Text(loc.text("sftp_not_connected"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+                    Button(loc.text("ssh_reconnect")) {
+                        sessionManager.reconnect(session)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             }
         }

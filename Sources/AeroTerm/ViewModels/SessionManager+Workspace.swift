@@ -27,11 +27,6 @@ extension SessionManager {
         }
     }
 
-    public func needsOffscreenKeepAlive(_ session: SessionItem) -> Bool {
-        (session.type.usesAccountAuth || session.type == .agentCLI)
-            && surface(containing: session.id) == nil
-    }
-
     public func enqueueWindowCommand(_ command: WorkspaceWindowCommand) {
         windowCommands.append(command)
     }
@@ -63,9 +58,6 @@ extension SessionManager {
 
     public func revealSession(_ sessionID: UUID) {
         guard sessions.contains(where: { $0.id == sessionID }) else { return }
-        if applyPendingDropPlacement(sessionID: sessionID) {
-            return
-        }
         if surface(containing: sessionID) != nil {
             selectSession(sessionID)
             return
@@ -75,10 +67,14 @@ extension SessionManager {
         ensurePrimaryExists()
 
         updateSurface(targetID) { surface in
-            if let layout = surface.layout,
-               let leafID = surface.focusedNodeID ?? layout.firstLeafNodeID() {
-                surface.layout = layout.replacingLeaf(nodeID: leafID, sessionID: sessionID)
-                surface.focusedNodeID = leafID
+            if let layout = surface.layout {
+                if let empty = layout.leaves.first(where: { $0.sessionID == nil }) {
+                    surface.layout = layout.replacingLeaf(nodeID: empty.id, sessionID: sessionID)
+                    surface.focusedNodeID = empty.id
+                } else if let leafID = surface.focusedNodeID ?? layout.firstLeafNodeID() {
+                    surface.layout = layout.replacingLeaf(nodeID: leafID, sessionID: sessionID)
+                    surface.focusedNodeID = leafID
+                }
             } else {
                 let leaf = PaneNode.leaf(id: UUID(), sessionID: sessionID)
                 surface.layout = leaf
@@ -186,13 +182,14 @@ extension SessionManager {
     }
 
     public func dropSession(_ sessionID: UUID, onto nodeID: UUID, edge: DropEdge, in surfaceID: UUID) {
-        guard let source = sessions.first(where: { $0.id == sessionID }) else { return }
+        guard sessions.contains(where: { $0.id == sessionID }) else { return }
+        if surface(id: surfaceID)?.layout?.nodeID(for: sessionID) == nodeID {
+            return
+        }
+
         let alreadyInTarget = surface(id: surfaceID)?.contains(sessionID: sessionID) == true
-        if alreadyInTarget {
-            if edge == .center, surface(id: surfaceID)?.layout?.nodeID(for: sessionID) == nodeID {
-                return
-            }
-            cloneSession(source, onto: nodeID, edge: edge, in: surfaceID)
+        if alreadyInTarget, edge == .center {
+            swapSessionsInSurface(sessionID, withNode: nodeID, surfaceID: surfaceID)
             return
         }
 
@@ -234,6 +231,15 @@ extension SessionManager {
     }
 
     public func closePane(nodeID: UUID, surfaceID: UUID) {
+        guard let host = surface(id: surfaceID), let layout = host.layout else { return }
+        let closingSessionID = layout.sessionID(for: nodeID)
+        let isLastLeaf = layout.leaves.count == 1
+
+        if isLastLeaf, !host.isPrimary {
+            handleDetachedWindowClose(surfaceID)
+            return
+        }
+
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
@@ -243,13 +249,15 @@ extension SessionManager {
             }
         }
         dismissEmptyDetachedWindows()
-        if let remainingSurface = surface(id: surfaceID) {
+        if let remainingSurface = surface(id: surfaceID), remainingSurface.layout != nil {
             if let focusedID = remainingSurface.focusedNodeID,
                let focused = remainingSurface.layout?.sessionID(for: focusedID) {
                 activeSessionID = focused
             } else if let remaining = remainingSurface.sessionIDs.first {
                 activeSessionID = remaining
             }
+        } else if activeSessionID == closingSessionID {
+            activeSessionID = sessions.first(where: { surface(containing: $0.id) != nil })?.id
         }
         DispatchQueue.main.async {
             NSApp.keyWindow?.contentView?.layoutSubtreeIfNeeded()
@@ -283,46 +291,20 @@ extension SessionManager {
         dismissEmptyDetachedWindows()
     }
 
-    private func cloneSession(_ source: SessionItem, onto nodeID: UUID, edge: DropEdge, in surfaceID: UUID) {
-        guard surface(id: surfaceID)?.layout?.contains(nodeID: nodeID) == true else { return }
-        let placeholderID = UUID()
-        if edge == .center {
-            pendingDropPlacement = PendingDropPlacement(surfaceID: surfaceID, nodeID: nodeID, edge: .center)
-        } else {
-            updateSurface(surfaceID) { surface in
-                surface.layout = surface.layout?.inserting(
-                    sessionID: nil,
-                    leafID: placeholderID,
-                    on: nodeID,
-                    edge: edge
-                )
-                surface.focusedNodeID = placeholderID
-            }
-            pendingDropPlacement = PendingDropPlacement(surfaceID: surfaceID, nodeID: placeholderID, edge: .center)
-        }
-        duplicateSession(source)
-    }
-
-    @discardableResult
-    private func applyPendingDropPlacement(sessionID: UUID) -> Bool {
-        guard let pending = pendingDropPlacement else { return false }
-        pendingDropPlacement = nil
-        guard surface(id: pending.surfaceID)?.layout?.contains(nodeID: pending.nodeID) == true else {
-            return false
-        }
-        updateSurface(pending.surfaceID) { surface in
-            if pending.edge == .center {
-                surface.layout = surface.layout?.replacingLeaf(nodeID: pending.nodeID, sessionID: sessionID)
-                surface.focusedNodeID = pending.nodeID
-            } else {
-                surface.layout = surface.layout?.placing(sessionID: sessionID, on: pending.nodeID, edge: pending.edge)
-                surface.focusedNodeID = surface.layout?.nodeID(for: sessionID)
-            }
+    private func swapSessionsInSurface(_ sessionID: UUID, withNode nodeID: UUID, surfaceID: UUID) {
+        guard let layout = surface(id: surfaceID)?.layout,
+              let sourceNodeID = layout.nodeID(for: sessionID)
+        else { return }
+        let targetSessionID = layout.sessionID(for: nodeID)
+        updateSurface(surfaceID) { surface in
+            var next = surface.layout?.replacingLeaf(nodeID: nodeID, sessionID: sessionID)
+            next = next?.replacingLeaf(nodeID: sourceNodeID, sessionID: targetSessionID)
+            surface.layout = next
+            surface.focusedNodeID = nodeID
         }
         activeSessionID = sessionID
-        focusedSurfaceID = pending.surfaceID
+        focusedSurfaceID = surfaceID
         sidebarTab = .active
-        return true
     }
 
     func pruneSessionFromLayouts(_ sessionID: UUID) {

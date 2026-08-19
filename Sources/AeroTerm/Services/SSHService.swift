@@ -9,6 +9,34 @@ import SwiftTerm
 public enum SSHAuthBuilder {
     public static func makeMethod(
         username: String,
+        authMethod: SSHAuthMethod,
+        password: String?,
+        privateKeyPEM: String?,
+        keyPassphrase: String?
+    ) throws -> SSHAuthenticationMethod {
+        switch authMethod {
+        case .publicKey:
+            guard let pem = privateKeyPEM, !pem.isEmpty else {
+                throw SSHConnectError.missingCredentials
+            }
+            return try makeMethod(
+                username: username,
+                password: nil,
+                privateKeyPEM: pem,
+                keyPassphrase: keyPassphrase
+            )
+        case .password:
+            return try makeMethod(
+                username: username,
+                password: password,
+                privateKeyPEM: nil,
+                keyPassphrase: nil
+            )
+        }
+    }
+
+    public static func makeMethod(
+        username: String,
         password: String?,
         privateKeyPEM: String?,
         keyPassphrase: String?
@@ -52,6 +80,8 @@ public enum SSHConnectError: LocalizedError {
     case unreachable
     case timeout
     case authFailed
+    case hostKeyMismatch
+    case cancelled
 
     public var errorDescription: String? {
         switch self {
@@ -67,6 +97,31 @@ public enum SSHConnectError: LocalizedError {
             return "SSH connection timed out."
         case .authFailed:
             return "Authentication failed. Check username, password or key."
+        case .hostKeyMismatch:
+            return "Host key changed. The server identity does not match the key saved from the last connection."
+        case .cancelled:
+            return "Connection cancelled."
+        }
+    }
+}
+
+/// First-seen host keys are remembered; a later mismatch fails the handshake.
+final class TOFUHostKeyValidator: NIOSSHClientServerAuthenticationDelegate, @unchecked Sendable {
+    let host: String
+    let port: Int
+
+    init(host: String, port: Int) {
+        self.host = host
+        self.port = port
+    }
+
+    func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
+        let encoded = String(openSSHPublicKey: hostKey)
+        do {
+            try HostKeyStore.shared.verifyOrRemember(host: host, port: port, openSSHKey: encoded)
+            validationCompletePromise.succeed(())
+        } catch {
+            validationCompletePromise.fail(error)
         }
     }
 }

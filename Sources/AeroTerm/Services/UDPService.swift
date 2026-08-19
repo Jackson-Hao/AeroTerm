@@ -2,174 +2,160 @@ import Foundation
 import Network
 import Combine
 
-public enum UDPMode: String, CaseIterable, Identifiable, Sendable {
-    case unicast = "单播 (Unicast)"
-    case multicast = "多播组 (Multicast)"
-    case broadcast = "广播 (Broadcast)"
-
-    public var id: String { rawValue }
-}
-
 public final class UDPEngine: ObservableObject, @unchecked Sendable {
     @Published public var isListening = false
     @Published public var mode: UDPMode = .unicast
-    @Published public var localPort: Int = 9000
+    @Published public var localPort: Int = 8080
     @Published public var targetHost: String = "127.0.0.1"
-    @Published public var targetPort: Int = 9000
-    @Published public var multicastGroup: String = "239.255.0.1"
-
+    @Published public var targetPort: Int = 8080
+    @Published public var errorMessage: String? = nil
     @Published public var logs: [NetworkLogItem] = []
     @Published public var txBytes: Int = 0
     @Published public var rxBytes: Int = 0
+    @Published public var receiveFileURL: URL? = nil
+    @Published public var fileTransferLabel: String? = nil
 
     private var listener: NWListener?
+    private var multicastGroup: NWConnectionGroup?
+    private var inbound: [ObjectIdentifier: NWConnection] = [:]
     private let queue = DispatchQueue(label: "com.aeroterm.udp", qos: .userInitiated)
     private var isDisposed = false
+    private var epoch: UInt64 = 0
+    private var receiveFileAccess = false
 
     public init() {}
 
-    public func startListening() {
-        stopListening()
+    public func start(
+        mode: UDPMode,
+        localPort: Int,
+        targetHost: String,
+        targetPort: Int
+    ) {
+        epoch += 1
+        let token = epoch
+        tearDown(resetFlags: false)
+        self.mode = mode
+        self.localPort = localPort
+        self.targetHost = targetHost
+        self.targetPort = targetPort
+        errorMessage = nil
 
-        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(localPort)) else {
-            appendLog(direction: .error, content: "无效的本地端口: \(localPort)")
+        guard (1...65535).contains(localPort),
+              let bindPort = NWEndpoint.Port(rawValue: UInt16(localPort))
+        else {
+            errorMessage = "Invalid local port: \(localPort)"
+            appendLog(direction: .error, content: "Invalid local port: \(localPort)")
             return
         }
 
-        let params = NWParameters.udp
-        params.allowLocalEndpointReuse = true
+        switch mode {
+        case .multicast:
+            startMulticast(group: targetHost, port: bindPort, token: token)
+        case .unicast, .broadcast:
+            startListener(on: bindPort, token: token)
+        }
+    }
 
-        do {
-            let listener = try NWListener(using: params, on: nwPort)
-            self.listener = listener
+    public func stop() {
+        epoch += 1
+        tearDown(resetFlags: true)
+    }
 
-            listener.stateUpdateHandler = { [weak self] state in
-                DispatchQueue.main.async {
-                    guard let self = self, !self.isDisposed else { return }
-                    switch state {
-                    case .ready:
-                        self.isListening = true
-                        self.appendLog(direction: .system, content: "UDP 监听已在端口 \(self.localPort) 就绪 (\(self.mode.rawValue))")
-                    case .failed, .cancelled:
-                        self.isListening = false
-                    default:
-                        break
+    public func send(_ data: Data) {
+        guard !isDisposed, !data.isEmpty else { return }
+        if mode == .multicast, let multicastGroup {
+            let remote = "\(targetHost):\(targetPort)"
+            multicastGroup.send(content: data) { error in
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.isDisposed else { return }
+                    if let error {
+                        self.appendLog(direction: .error, content: "Send failed: \(error.localizedDescription)")
+                        return
                     }
+                    self.txBytes += data.count
+                    self.appendLog(
+                        direction: .send,
+                        content: TCPTextEncoding.utf8.decode(data),
+                        bytes: data.count,
+                        remote: remote,
+                        payload: data
+                    )
                 }
             }
-
-            listener.newConnectionHandler = { [weak self] conn in
-                self?.handleInboundConnection(conn)
-            }
-
-            listener.start(queue: queue)
-        } catch {
-            appendLog(direction: .error, content: "创建 UDP 监听器异常: \(error.localizedDescription)")
+            return
         }
-    }
 
-    public func stopListening() {
-        listener?.cancel()
-        listener = nil
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, !self.isDisposed else { return }
-            self.isListening = false
-        }
-    }
-
-    private func handleInboundConnection(_ conn: NWConnection) {
-        guard !isDisposed else { return }
-        let ep = "\(conn.endpoint)"
-        conn.start(queue: queue)
-        receiveNextMessage(on: conn, endpoint: ep)
-    }
-
-    private func receiveNextMessage(on conn: NWConnection, endpoint: String) {
-        guard !isDisposed else { return }
-        conn.receiveMessage { [weak self, weak conn] data, _, isComplete, error in
-            guard let self = self, !self.isDisposed else { return }
-            if let data = data, !data.isEmpty {
-                DispatchQueue.main.async {
-                    guard !self.isDisposed else { return }
-                    self.rxBytes += data.count
-                    let str = String(data: data, encoding: .utf8) ?? "<二进制 UDP 数据>"
-                    let hex = HexUtils.dataToHexString(data)
-                    self.appendLog(direction: .receive, content: str, hex: hex, bytes: data.count, remote: endpoint)
-                }
-            }
-            if error == nil && !isComplete, let activeConn = conn {
-                self.receiveNextMessage(on: activeConn, endpoint: endpoint)
-            }
-        }
-    }
-
-    public func send(data: Data, formatIsHex: Bool = false) {
-        guard !isDisposed else { return }
         let destinationHost: String
-        let destinationPort: Int
-
         switch mode {
         case .unicast:
             destinationHost = targetHost
-            destinationPort = targetPort
         case .broadcast:
-            destinationHost = "255.255.255.255"
-            destinationPort = targetPort
+            destinationHost = targetHost.isEmpty || targetHost == "0.0.0.0" ? "255.255.255.255" : targetHost
         case .multicast:
-            destinationHost = multicastGroup
-            destinationPort = targetPort
+            destinationHost = targetHost
+        }
+        guard (1...65535).contains(targetPort),
+              let destPort = NWEndpoint.Port(rawValue: UInt16(targetPort))
+        else {
+            appendLog(direction: .error, content: "Invalid target port: \(targetPort)")
+            return
         }
 
-        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(destinationPort)) else { return }
-
-        let nwHost = NWEndpoint.Host(destinationHost)
-        let params = NWParameters.udp
-        params.allowLocalEndpointReuse = true
-
-        let conn = NWConnection(host: nwHost, port: nwPort, using: params)
+        let params = makeParameters(broadcast: mode == .broadcast)
+        if (1...65535).contains(localPort),
+           let localNW = NWEndpoint.Port(rawValue: UInt16(localPort)) {
+            params.requiredLocalEndpoint = .hostPort(host: .ipv4(.any), port: localNW)
+        }
+        let conn = NWConnection(host: NWEndpoint.Host(destinationHost), port: destPort, using: params)
         conn.stateUpdateHandler = { [weak self] state in
-            guard let self = self, !self.isDisposed else { return }
+            guard let self, !self.isDisposed else { return }
             switch state {
             case .ready:
                 conn.send(content: data, completion: .contentProcessed { [weak self] error in
                     DispatchQueue.main.async {
-                        guard let self = self, !self.isDisposed else { return }
-                        if error == nil {
+                        guard let self, !self.isDisposed else { return }
+                        if let error {
+                            self.appendLog(direction: .error, content: "Send failed: \(error.localizedDescription)")
+                        } else {
                             self.txBytes += data.count
-                            let str = String(data: data, encoding: .utf8) ?? "<二进制数据>"
-                            let hex = HexUtils.dataToHexString(data)
                             self.appendLog(
                                 direction: .send,
-                                content: "\(self.mode == .broadcast ? "[广播] " : "")\(str)",
-                                hex: hex,
+                                content: TCPTextEncoding.utf8.decode(data),
                                 bytes: data.count,
-                                remote: "\(destinationHost):\(destinationPort)"
+                                remote: "\(destinationHost):\(self.targetPort)",
+                                payload: data
                             )
                         }
                     }
                     conn.cancel()
                 })
-            case .failed:
+            case .failed(let error):
+                DispatchQueue.main.async {
+                    self.appendLog(direction: .error, content: "Send failed: \(error.localizedDescription)")
+                }
                 conn.cancel()
             default:
                 break
             }
         }
-
         conn.start(queue: queue)
     }
 
-    public func sendText(_ text: String, addNewline: Bool = false) {
-        var str = text
-        if addNewline { str += "\n" }
-        if let data = str.data(using: .utf8) {
-            send(data: data, formatIsHex: false)
+    public func sendFile(_ url: URL) {
+        Task { [weak self] in
+            await self?.performSendFile(url)
         }
     }
 
-    public func sendHex(_ hex: String) {
-        if let data = HexUtils.hexStringToData(hex) {
-            send(data: data, formatIsHex: true)
+    public func setReceiveFile(_ url: URL?) {
+        if receiveFileAccess, let previous = receiveFileURL {
+            previous.stopAccessingSecurityScopedResource()
+            receiveFileAccess = false
+        }
+        receiveFileURL = url
+        if let url {
+            receiveFileAccess = url.startAccessingSecurityScopedResource()
+            appendLog(direction: .system, content: "Saving received bytes to \(url.path)")
         }
     }
 
@@ -179,23 +165,222 @@ public final class UDPEngine: ObservableObject, @unchecked Sendable {
         rxBytes = 0
     }
 
-    private func appendLog(direction: LogDirection, content: String, hex: String? = nil, bytes: Int = 0, remote: String? = nil) {
+    private func startListener(on port: NWEndpoint.Port, token: UInt64) {
+        do {
+            let listener = try NWListener(using: makeParameters(broadcast: mode == .broadcast), on: port)
+            self.listener = listener
+            listener.stateUpdateHandler = { [weak self] state in
+                DispatchQueue.main.async {
+                    guard let self, !self.isDisposed, self.epoch == token else { return }
+                    switch state {
+                    case .ready:
+                        self.isListening = true
+                        self.appendLog(
+                            direction: .system,
+                            content: "Listening UDP \(self.mode.title) on :\(self.localPort)"
+                        )
+                    case .failed(let error):
+                        self.isListening = false
+                        self.errorMessage = error.localizedDescription
+                        self.appendLog(direction: .error, content: "Listen failed: \(error.localizedDescription)")
+                    case .cancelled:
+                        if self.epoch == token {
+                            self.isListening = false
+                        }
+                    default:
+                        break
+                    }
+                }
+            }
+            listener.newConnectionHandler = { [weak self] conn in
+                self?.handleInbound(conn, token: token)
+            }
+            listener.start(queue: queue)
+        } catch {
+            appendLog(direction: .error, content: "Listener error: \(error.localizedDescription)")
+        }
+    }
+
+    private func startMulticast(group: String, port: NWEndpoint.Port, token: UInt64) {
+        do {
+            let descriptor = try NWMulticastGroup(for: [.hostPort(host: NWEndpoint.Host(group), port: port)])
+            let connectionGroup = NWConnectionGroup(with: descriptor, using: makeParameters(broadcast: false))
+            multicastGroup = connectionGroup
+            connectionGroup.stateUpdateHandler = { [weak self] state in
+                DispatchQueue.main.async {
+                    guard let self, !self.isDisposed, self.epoch == token else { return }
+                    switch state {
+                    case .ready:
+                        self.isListening = true
+                        self.appendLog(
+                            direction: .system,
+                            content: "Joined multicast \(group):\(self.localPort)"
+                        )
+                    case .failed(let error):
+                        self.isListening = false
+                        self.errorMessage = error.localizedDescription
+                        self.appendLog(direction: .error, content: "Multicast failed: \(error.localizedDescription)")
+                    case .cancelled:
+                        if self.epoch == token {
+                            self.isListening = false
+                        }
+                    default:
+                        break
+                    }
+                }
+            }
+            connectionGroup.setReceiveHandler(maximumMessageSize: 65535, rejectOversizedMessages: false) { [weak self] message, content, _ in
+                guard let self, !self.isDisposed, self.epoch == token, let data = content, !data.isEmpty else { return }
+                let remote = message.remoteEndpoint.map { "\($0)" } ?? group
+                DispatchQueue.main.async {
+                    guard !self.isDisposed, self.epoch == token else { return }
+                    self.rxBytes += data.count
+                    self.appendLog(
+                        direction: .receive,
+                        content: TCPTextEncoding.utf8.decode(data),
+                        bytes: data.count,
+                        remote: remote,
+                        payload: data
+                    )
+                    self.writeReceiveFile(data)
+                }
+            }
+            connectionGroup.start(queue: queue)
+        } catch {
+            errorMessage = error.localizedDescription
+            appendLog(direction: .error, content: "Multicast join failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func handleInbound(_ conn: NWConnection, token: UInt64) {
+        guard !isDisposed, epoch == token else {
+            conn.cancel()
+            return
+        }
+        inbound[ObjectIdentifier(conn)] = conn
+        conn.start(queue: queue)
+        receiveLoop(conn, token: token)
+    }
+
+    private func receiveLoop(_ conn: NWConnection, token: UInt64) {
+        conn.receiveMessage { [weak self, weak conn] data, _, _, error in
+            guard let self, let conn, !self.isDisposed, self.epoch == token else { return }
+            if let data, !data.isEmpty {
+                let remote = "\(conn.endpoint)"
+                DispatchQueue.main.async {
+                    guard !self.isDisposed, self.epoch == token else { return }
+                    self.rxBytes += data.count
+                    self.appendLog(
+                        direction: .receive,
+                        content: TCPTextEncoding.utf8.decode(data),
+                        bytes: data.count,
+                        remote: remote,
+                        payload: data
+                    )
+                    self.writeReceiveFile(data)
+                }
+            }
+            if error != nil {
+                self.inbound[ObjectIdentifier(conn)] = nil
+                conn.cancel()
+                return
+            }
+            // UDP datagrams are complete messages; keep the socket open.
+            self.receiveLoop(conn, token: token)
+        }
+    }
+
+    private func performSendFile(_ url: URL) async {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            await MainActor.run { self.fileTransferLabel = "Sending \(url.lastPathComponent)" }
+            var offset = 0
+            while offset < data.count {
+                let end = min(offset + TCPIO.chunkSize, data.count)
+                let chunk = data.subdata(in: offset..<end)
+                await MainActor.run { self.send(chunk) }
+                offset = end
+            }
+            await MainActor.run {
+                self.fileTransferLabel = nil
+                self.appendLog(
+                    direction: .system,
+                    content: "Sent file \(url.lastPathComponent) (\(HexUtils.formatByteCount(data.count)))"
+                )
+            }
+        } catch {
+            await MainActor.run {
+                self.fileTransferLabel = nil
+                self.appendLog(direction: .error, content: "File send failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func makeParameters(broadcast: Bool) -> NWParameters {
+        let params = NWParameters.udp
+        params.allowLocalEndpointReuse = true
+        params.includePeerToPeer = true
+        if broadcast, let ip = params.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
+            ip.version = .v4
+        }
+        return params
+    }
+
+    private func writeReceiveFile(_ data: Data) {
+        guard let url = receiveFileURL else { return }
+        do {
+            try TCPIO.append(data, to: url)
+        } catch {
+            appendLog(direction: .error, content: "Receive file write failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func tearDown(resetFlags: Bool) {
+        listener?.cancel()
+        listener = nil
+        multicastGroup?.cancel()
+        multicastGroup = nil
+        for (_, conn) in inbound {
+            conn.cancel()
+        }
+        inbound.removeAll()
+        if resetFlags {
+            isListening = false
+        }
+    }
+
+    private func appendLog(
+        direction: LogDirection,
+        content: String,
+        bytes: Int = 0,
+        remote: String? = nil,
+        payload: Data? = nil
+    ) {
         guard !isDisposed else { return }
-        let item = NetworkLogItem(
-            direction: direction,
-            content: content,
-            hexRepresentation: hex,
-            byteCount: bytes,
-            remoteEndpoint: remote
+        logs.append(
+            NetworkLogItem(
+                direction: direction,
+                content: content,
+                hexRepresentation: payload.map { HexUtils.dataToHexString($0) },
+                byteCount: bytes,
+                remoteEndpoint: remote,
+                payload: payload
+            )
         )
-        logs.append(item)
-        if logs.count > 1000 {
-            logs.removeFirst(logs.count - 1000)
+        if logs.count > 2000 {
+            logs.removeFirst(logs.count - 2000)
         }
     }
 
     deinit {
         isDisposed = true
-        stopListening()
+        if receiveFileAccess, let url = receiveFileURL {
+            url.stopAccessingSecurityScopedResource()
+        }
+        listener?.cancel()
+        multicastGroup?.cancel()
+        for (_, conn) in inbound { conn.cancel() }
     }
 }

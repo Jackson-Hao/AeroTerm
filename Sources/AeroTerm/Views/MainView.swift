@@ -94,7 +94,11 @@ public struct MainView: View {
                 Color.black.opacity(0.28)
                     .ignoresSafeArea()
                 ConnectionHUDView(hud: hud) {
-                    sessionManager.dismissConnectionHUD()
+                    if hud.isFinished {
+                        sessionManager.dismissConnectionHUD()
+                    } else {
+                        sessionManager.cancelRemoteConnect()
+                    }
                 }
             }
         }

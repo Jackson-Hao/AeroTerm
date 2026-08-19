@@ -19,14 +19,18 @@ public struct SessionContentView: View {
             TelnetToolView(session: session)
         case .httpClient:
             HTTPToolView(session: session)
+        case .httpServer:
+            HTTPServerToolView(session: session)
         case .agentCLI:
             AgentCLIToolView(session: session)
         case .ssh:
             SSHToolView(session: session)
         case .sftp:
             SFTPToolView(session: session)
-        case .vnc, .rdp:
-            WelcomeHomeView()
+        case .vnc:
+            VNCToolView(session: session)
+        case .rdp:
+            RDPToolView(session: session)
         }
     }
 }

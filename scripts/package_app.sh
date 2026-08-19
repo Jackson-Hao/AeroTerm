@@ -28,6 +28,15 @@ mkdir -p "${RESOURCES_DIR}"
 cp "${BIN_PATH}" "${MACOS_DIR}/${APP_NAME}"
 chmod +x "${MACOS_DIR}/${APP_NAME}"
 
+# SwiftPM may emit @rpath dylibs (e.g. RoyalVNCKit). Finder surfaces a missing
+# one as "not supported on this version of macOS" instead of a dyld error.
+shopt -s nullglob
+for dylib in "${BIN_DIR}"/*.dylib; do
+    cp "${dylib}" "${MACOS_DIR}/$(basename "${dylib}")"
+    chmod +x "${MACOS_DIR}/$(basename "${dylib}")"
+done
+shopt -u nullglob
+
 if ls "${BIN_DIR}"/*.bundle 1> /dev/null 2>&1; then
     cp -R "${BIN_DIR}"/*.bundle "${RESOURCES_DIR}/" || true
 fi

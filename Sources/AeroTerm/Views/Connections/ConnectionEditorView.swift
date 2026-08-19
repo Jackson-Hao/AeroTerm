@@ -8,12 +8,17 @@ public struct ConnectionEditorView: View {
     @State private var name: String
     @State private var host: String
     @State private var portString: String
+    @State private var localPortString: String
+    @State private var udpMode: UDPMode
+    @State private var labelText: String
     @State private var username: String
     @State private var accountID: UUID?
     @State private var customArgs: String
     @State private var workingDirectory: String
     @State private var envVars: [String: String]
     @State private var selectedBaudRate: Int
+    @State private var serialSettings: SerialSettings
+    @State private var desktopSettings: DesktopDisplaySettings
     @State private var availablePorts: [SerialPortInfo] = []
     @State private var errorText: String?
     @State private var isShowingAccountEditor = false
@@ -28,12 +33,17 @@ public struct ConnectionEditorView: View {
         _name = State(initialValue: config.name)
         _host = State(initialValue: config.host)
         _portString = State(initialValue: "\(config.port)")
+        _localPortString = State(initialValue: config.localPort > 0 ? "\(config.localPort)" : "0")
+        _udpMode = State(initialValue: config.udpMode)
+        _labelText = State(initialValue: config.label)
         _username = State(initialValue: config.username)
         _accountID = State(initialValue: config.accountID)
         _customArgs = State(initialValue: config.customArgs ?? "")
         _workingDirectory = State(initialValue: config.workingDirectory ?? "")
         _envVars = State(initialValue: config.envVars ?? [:])
         _selectedBaudRate = State(initialValue: config.type == .serial ? config.port : 115200)
+        _serialSettings = State(initialValue: config.serial)
+        _desktopSettings = State(initialValue: config.desktop)
     }
 
     public var body: some View {
@@ -57,6 +67,11 @@ public struct ConnectionEditorView: View {
                 agentFields
             } else if type == .serial {
                 serialFields
+            } else if type == .httpClient {
+                field(loc.text("group_label")) {
+                    TextField(loc.text("http_label_placeholder"), text: $labelText)
+                        .textFieldStyle(.roundedBorder)
+                }
             } else {
                 networkFields
             }
@@ -108,10 +123,43 @@ public struct ConnectionEditorView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 88)
                 }
+                if type == .tcpClient || type == .udpTool || type == .httpServer {
+                    field(loc.text("tcp_local_port")) {
+                        TextField(loc.text("tcp_local_port_placeholder"), text: $localPortString)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 88)
+                    }
+                }
+            }
+
+            if type == .udpTool {
+                field(loc.text("udp_mode")) {
+                    Picker("", selection: $udpMode) {
+                        ForEach(UDPMode.allCases) { item in
+                            Text(item.title).tag(item)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .onChange(of: udpMode) { _, newMode in
+                        switch newMode {
+                        case .multicast:
+                            if host == "127.0.0.1" || host == "255.255.255.255" { host = "239.255.0.1" }
+                        case .broadcast:
+                            if host == "127.0.0.1" || host == "239.255.0.1" { host = "255.255.255.255" }
+                        case .unicast:
+                            break
+                        }
+                    }
+                }
             }
 
             if type.usesAccountPicker {
                 remoteAccountPicker
+            }
+
+            if type == .vnc || type == .rdp {
+                DesktopDisplaySettingsForm(settings: $desktopSettings)
             }
         }
     }
@@ -140,31 +188,15 @@ public struct ConnectionEditorView: View {
     }
 
     private var serialFields: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            field(loc.text("serial_port_label")) {
-                if availablePorts.isEmpty {
-                    TextField("/dev/cu.usbserial", text: $host)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12, design: .monospaced))
-                } else {
-                    Picker("", selection: $host) {
-                        ForEach(availablePorts, id: \.path) { port in
-                            Text("\(port.name) (\(port.path))").tag(port.path)
-                        }
-                    }
-                    .labelsHidden()
-                }
+        SerialSettingsForm(
+            devicePath: $host,
+            baudRate: $selectedBaudRate,
+            settings: $serialSettings,
+            availablePorts: availablePorts,
+            onRefresh: {
+                availablePorts = SerialEngine.getAvailablePorts()
             }
-            field(loc.text("baud_rate_label")) {
-                Picker("", selection: $selectedBaudRate) {
-                    ForEach([9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600], id: \.self) { rate in
-                        Text("\(rate)").tag(rate)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 160)
-            }
-        }
+        )
     }
 
     private var agentFields: some View {
@@ -225,13 +257,22 @@ public struct ConnectionEditorView: View {
             type: type,
             host: type == .serial ? host : host.trimmingCharacters(in: .whitespacesAndNewlines),
             port: type == .serial ? selectedBaudRate : (Int(portString) ?? type.defaultPort),
+            localPort: (type == .tcpClient || type == .udpTool || type == .httpServer) ? (Int(localPortString) ?? 0) : 0,
+            udpMode: type == .udpTool ? udpMode : .unicast,
             username: account?.username ?? username,
             authMethod: account?.authMethod ?? .password,
             accountID: accountID,
             customArgs: customArgs.isEmpty ? nil : customArgs,
             workingDirectory: workingDirectory.isEmpty ? nil : workingDirectory,
-            envVars: envVars.isEmpty ? nil : envVars
+            envVars: envVars.isEmpty ? nil : envVars,
+            label: type == .httpClient ? labelText.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            serial: type == .serial ? serialSettings : .default,
+            desktop: (type == .vnc || type == .rdp) ? desktopSettings : .default
         )
+        if type == .httpClient {
+            config.host = ""
+            config.port = 0
+        }
         if type == .agentCLI {
             config.host = host.trimmingCharacters(in: .whitespacesAndNewlines)
             config.port = 0

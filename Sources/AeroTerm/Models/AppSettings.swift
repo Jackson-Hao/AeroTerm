@@ -58,6 +58,12 @@ public final class SettingsManager: ObservableObject {
         }
     }
 
+    @Published public var terminalPaletteID: String = SerialColorScheme.followAppID {
+        didSet {
+            UserDefaults.standard.set(terminalPaletteID, forKey: "AeroTerm.TerminalPaletteID.v1")
+        }
+    }
+
     @Published public var isShowingSettingsSheet: Bool = false
 
     private init() {
@@ -85,6 +91,13 @@ public final class SettingsManager: ObservableObject {
         } else {
             self.terminalFontName = "CascadiaCodeNF-Regular"
             UserDefaults.standard.set("CascadiaCodeNF-Regular", forKey: "AeroTerm.TerminalFontName.v2")
+        }
+
+        if let savedPalette = UserDefaults.standard.string(forKey: "AeroTerm.TerminalPaletteID.v1"),
+           SerialColorScheme.all.contains(where: { $0.id == savedPalette }) {
+            self.terminalPaletteID = savedPalette
+        } else {
+            self.terminalPaletteID = SerialColorScheme.followAppID
         }
     }
 

@@ -67,9 +67,43 @@ public struct SidebarView: View {
         }
     }
 
+    private func activeSessionSubtitle(_ session: SessionItem) -> String {
+        if session.type == .httpClient {
+            return session.label.isEmpty ? session.subtitle : session.label
+        }
+        if session.type == .serial {
+            let device = session.host.replacingOccurrences(of: "/dev/cu.", with: "")
+            if device.isEmpty {
+                return "\(loc.text(session.serial.mode.titleKey)) · \(String(session.port)) \(session.serial.lineSpec)"
+            }
+            return "\(loc.text(session.serial.mode.titleKey)) · \(device) @ \(String(session.port))"
+        }
+        if session.type == .udpTool {
+            return "\(session.udpMode.title) \(session.host):\(String(session.port))"
+        }
+        return "\(session.host):\(String(session.port))"
+    }
+
+    private func localPortLine(_ port: Int) -> String {
+        if port > 0 {
+            return String(format: loc.text("tcp_local_line"), String(port))
+        }
+        return loc.text("tcp_local_auto")
+    }
+
     private func savedConnectionSubtitle(_ config: ConnectionConfig) -> String {
+        if config.type == .httpClient {
+            return config.label.isEmpty ? config.type.rawValue : config.label
+        }
         if config.type == .serial {
-            return "\(config.port) bps"
+            let device = config.host.replacingOccurrences(of: "/dev/cu.", with: "")
+            if device.isEmpty {
+                return "\(loc.text(config.serial.mode.titleKey)) · \(String(config.port)) \(config.serial.lineSpec)"
+            }
+            return "\(loc.text(config.serial.mode.titleKey)) · \(device) @ \(String(config.port))"
+        }
+        if config.type == .udpTool {
+            return "\(config.udpMode.title) \(config.host):\(String(config.port))"
         }
         let user = sessionManager.resolvedUsername(for: config)
         if config.type.usesAccountAuth && !user.isEmpty {
@@ -136,6 +170,18 @@ public struct SidebarView: View {
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+                if config.type == .tcpClient || config.type == .udpTool || config.type == .httpServer {
+                    Text(verbatim: localPortLine(config.localPort))
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                if config.type == .serial {
+                    Text(verbatim: "\(String(config.port)) \(config.serial.detailLabel)")
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
@@ -238,10 +284,22 @@ public struct SidebarView: View {
                     .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
                     .lineLimit(1)
 
-                Text("\(session.host):\(session.port)")
+                Text(verbatim: activeSessionSubtitle(session))
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+                if session.type == .tcpClient || session.type == .udpTool || session.type == .httpServer {
+                    Text(verbatim: localPortLine(session.localPort))
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                if session.type == .serial {
+                    Text(verbatim: "\(String(session.port)) \(session.serial.detailLabel)")
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
