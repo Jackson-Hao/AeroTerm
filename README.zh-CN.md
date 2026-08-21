@@ -7,6 +7,7 @@
   </p>
   <p>
     <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-111827?logo=apple&logoColor=white" />
+    <img alt="Apple Silicon and Intel" src="https://img.shields.io/badge/arch-arm64%20%7C%20x86__64-6366f1" />
     <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" />
     <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-22c55e" />
     <img alt="Version 1.0-0821" src="https://img.shields.io/badge/version-1.0--0821-38bdf8" />
@@ -114,13 +115,24 @@ Claude Code · Codex · Antigravity · Grok · Hermes · 或任意本地程序�
 
 ## 开始使用
 
-1. 打开 `dist/AeroTerm.app`，或从 `dist/AeroTerm-darwin-arm64.dmg` 安装后在「应用程序」里启动。
+需要 **macOS 15** 或更高版本，支持 **Apple Silicon** 与 **Intel**。
+
+按自己的 Mac 选对应的磁盘映像，打开后把 AeroTerm 拖进「应用程序」：
+
+| Mac | 磁盘映像 |
+| --- | --- |
+| Apple Silicon（M1 及更新） | `AeroTerm-darwin-arm64.dmg` |
+| Intel | `AeroTerm-darwin-x86_64.dmg` |
+
+本仓库编译产物在 `dist/`。GitHub Releases 使用相同文件名。
+
+1. 从「应用程序」启动 AeroTerm（或打开 `dist/` 里的 `.app`）。
 2. 系统询问时允许钥匙串访问。
 3. 新建连接、进入工作台，或点一条最近主机。
 
 `⌘N` 新建连接 · `⌘,` 设置 · `⌃⌘S` 侧边栏 · `⇧⌘1` 欢迎窗口
 
-需要 **macOS 15** 或更高版本。
+从源码编译：Apple Silicon 用 `./scripts/build_app.sh release`；Intel 包用 `./scripts/build_app_x64.sh release`（可在 Apple Silicon 上交叉编译）。
 
 ---
 

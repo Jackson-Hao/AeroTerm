@@ -7,6 +7,7 @@
   </p>
   <p>
     <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-111827?logo=apple&logoColor=white" />
+    <img alt="Apple Silicon and Intel" src="https://img.shields.io/badge/arch-arm64%20%7C%20x86__64-6366f1" />
     <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" />
     <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-22c55e" />
     <img alt="Version 1.0-0821" src="https://img.shields.io/badge/version-1.0--0821-38bdf8" />
@@ -114,13 +115,24 @@ Claude Code · Codex · Antigravity · Grok · Hermes · or any custom binary.
 
 ## Getting started
 
-1. Open `dist/AeroTerm.app`, or install from `dist/AeroTerm-darwin-arm64.dmg` and launch AeroTerm from Applications.
+Requires **macOS 15** or later, on **Apple Silicon** or **Intel**.
+
+Pick the disk image for your Mac, open it, and drag AeroTerm into Applications:
+
+| Mac | Disk image |
+| --- | --- |
+| Apple Silicon (M1 and later) | `AeroTerm-darwin-arm64.dmg` |
+| Intel | `AeroTerm-darwin-x86_64.dmg` |
+
+Builds from this repo land in `dist/`. GitHub Releases use the same names.
+
+1. Launch AeroTerm from Applications (or open the `.app` in `dist/`).
 2. Grant Keychain access when macOS asks.
 3. Create a connection, open the workbench, or click a recent host.
 
 `⌘N` new connection · `⌘,` settings · `⌃⌘S` sidebar · `⇧⌘1` welcome window
 
-Requires **macOS 15** or later.
+From source: `./scripts/build_app.sh release` on Apple Silicon, or `./scripts/build_app_x64.sh release` for an Intel package (can be cross-compiled on Apple Silicon).
 
 ---
 

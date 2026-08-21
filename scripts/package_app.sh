@@ -4,15 +4,42 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="AeroTerm"
 BUILD_CONFIG="${1:-release}"
+ARCH="${2:-}"
 DIST_DIR="${PROJECT_ROOT}/dist"
-APP_DIR="${DIST_DIR}/${APP_NAME}.app"
+HOST_ARCH="$(uname -m)"
+
+normalize_arch() {
+    case "${1}" in
+        x64|x86_64|amd64) echo "x86_64" ;;
+        arm64|aarch64) echo "arm64" ;;
+        "") echo "" ;;
+        *)
+            echo "❌ 不支持的架构: ${1}（可用 x86_64 / arm64）" >&2
+            exit 1
+            ;;
+    esac
+}
+
+ARCH="$(normalize_arch "${ARCH}")"
+if [ -z "${ARCH}" ]; then
+    ARCH="${HOST_ARCH}"
+    SWIFT_ARCH_ARGS=()
+else
+    SWIFT_ARCH_ARGS=(--arch "${ARCH}")
+fi
+
+if [ "${ARCH}" = "${HOST_ARCH}" ]; then
+    APP_DIR="${DIST_DIR}/${APP_NAME}.app"
+else
+    APP_DIR="${DIST_DIR}/${APP_NAME}-${ARCH}.app"
+fi
 CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 
 cd "${PROJECT_ROOT}"
 
-BIN_DIR=$(swift build -c "${BUILD_CONFIG}" --show-bin-path)
+BIN_DIR=$(swift build -c "${BUILD_CONFIG}" "${SWIFT_ARCH_ARGS[@]}" --show-bin-path)
 BIN_PATH="${BIN_DIR}/${APP_NAME}"
 
 if [ ! -f "${BIN_PATH}" ]; then
@@ -20,7 +47,7 @@ if [ ! -f "${BIN_PATH}" ]; then
     exit 1
 fi
 
-echo "📦 正在打包 ${APP_NAME}.app (${BUILD_CONFIG})..."
+echo "📦 正在打包 ${APP_DIR} (${BUILD_CONFIG}, ${ARCH})..."
 rm -rf "${APP_DIR}"
 mkdir -p "${MACOS_DIR}"
 mkdir -p "${RESOURCES_DIR}"
@@ -113,7 +140,6 @@ codesign --force --deep --sign - "${APP_DIR}"
 
 APP_SIZE=$(du -sh "${APP_DIR}" | awk '{print $1}')
 
-ARCH="$(uname -m)"
 DMG_PATH="${DIST_DIR}/${APP_NAME}-darwin-${ARCH}.dmg"
 echo "💿 正在打包 ${DMG_PATH}..."
 rm -f "${DMG_PATH}"
