@@ -1,22 +1,26 @@
-# AeroTerm
-
-[English](README.md) · [中文-中国（zh-cn）](README.zh-CN.md)
-
 <div align="center">
-  <img src="Assets/AppIcon_1024.png" width="128" height="128" alt="AeroTerm Icon" />
-  <h3>A native macOS workbench for SSH, files, lab tools, remote desktops, and AI agent CLIs</h3>
-  <p>One app. Every session. Built for the Mac, not a browser in a box.</p>
+  <img src="Assets/readme-hero.png" alt="AeroTerm" width="100%" />
+  <p>
+    <a href="README.md">English</a>
+    ·
+    <a href="README.zh-CN.md">中文-中国（zh-cn）</a>
+  </p>
+  <p>
+    <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-111827?logo=apple&logoColor=white" />
+    <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" />
+    <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-22c55e" />
+    <img alt="Version 1.0-0821" src="https://img.shields.io/badge/version-1.0--0821-38bdf8" />
+  </p>
+  <p><strong>One app. Every session.</strong><br />Built for the Mac, not a browser in a box.</p>
 </div>
 
 ---
 
-## What it is
-
-AeroTerm is a native macOS app for people who live on remote hosts, lab benches, and local agent CLIs. SSH, SFTP, Telnet, serial, TCP/UDP, HTTP, VNC, RDP, and popular coding agents all sit in the same workspace — split, popped out, suspended, or reconnected without scattering into five other programs.
+AeroTerm is a native macOS workbench for people who live on remote hosts, lab benches, and local agent CLIs. SSH, SFTP, Telnet, serial, TCP/UDP, HTTP, VNC, RDP, and popular coding agents all sit in the same workspace — split, popped out, suspended, or reconnected without scattering into five other programs.
 
 It is free and open source. Passwords and private-key passphrases stay in the macOS Keychain; AeroTerm will not start until it can protect them.
 
-**Languages:** English, 中文-中国（zh-cn）, 中文-台湾（zh-tw）, 日本語, Français, Deutsch, or follow the system language.
+**Languages:** English · 中文-中国（zh-cn） · 中文-台灣（zh-tw） · 日本語 · Français · Deutsch · or follow the system.
 
 ---
 
@@ -26,26 +30,28 @@ Most “all-in-one” remote tools are Electron shells: large on disk, heavy in 
 
 AeroTerm is the opposite bet:
 
-- **Native, not wrapped.** SwiftUI on macOS 15, not Chromium. Cold start stays snappy; the workbench stays calm when many sessions are open.
-- **One place for the whole job.** Remote shells, file transfer, UART boards, packet debugging, HTTP APIs, Windows/Linux desktops, and agent CLIs share the same sidebar, recents, and layout.
-- **Connections and logins are separate.** A host profile remembers *where*; an account remembers *who you are*. Reuse one login across many machines without copying passwords around.
-- **Sessions you can keep.** Split panes, detach a session to its own window, suspend instead of killing the tab, reconnect when the link drops.
-- **Secrets stay on the Mac.** Keychain-backed passwords and key passphrases — no cloud vault unless you choose to put one there yourself.
-- **Open source, no paywall.** MIT licensed. No “Pro” protocol pack, no seat count, no sync subscription required to use the app.
+| | |
+| --- | --- |
+| **Native, not wrapped** | SwiftUI on macOS 15, not Chromium. Cold start stays snappy; the workbench stays calm when many sessions are open. |
+| **One place for the whole job** | Remote shells, file transfer, UART boards, packet debugging, HTTP APIs, Windows/Linux desktops, and agent CLIs share the same sidebar, recents, and layout. |
+| **Connections and logins are separate** | A host profile remembers *where*; an account remembers *who you are*. Reuse one login across many machines. |
+| **Sessions you can keep** | Split panes, detach a session to its own window, suspend instead of killing the tab, reconnect when the link drops. |
+| **Secrets stay on the Mac** | Keychain-backed passwords and key passphrases — no cloud vault unless you put one there yourself. |
+| **Open source, no paywall** | MIT licensed. No “Pro” protocol pack, no seat count, no sync subscription required to use the app. |
 
 ---
 
 ## How it compares
 
 | | **AeroTerm** | Termius | Electerm | iTerm2 | Typical serial / API / RDP apps |
-| --- | --- | --- | --- | --- | --- |
+| --- | :---: | :---: | :---: | :---: | --- |
 | **Mac feel** | Native SwiftUI | Cross-platform / Electron | Electron | Native | Mixed |
-| **SSH + SFTP** | Yes | Yes | Yes | SSH via the shell | Usually one or the other |
-| **Serial (shell + tester)** | Yes | No | Limited | No | Serial-only tools |
-| **TCP / UDP workbench** | Yes | No | No | No | Dedicated packet tools |
-| **HTTP client & local server** | Yes | No | No | No | Postman and friends |
-| **VNC + RDP** | Yes | Extra product / plan | Yes | No | Viewer per protocol |
-| **AI agent CLIs in a real terminal** | Yes | No | No | Manual | Manual |
+| **SSH + SFTP** | ● | ● | ● | SSH via the shell | Usually one or the other |
+| **Serial (shell + tester)** | ● | | Limited | | Serial-only tools |
+| **TCP / UDP workbench** | ● | | | | Dedicated packet tools |
+| **HTTP client & local server** | ● | | | | Postman and friends |
+| **VNC + RDP** | ● | Extra product / plan | ● | | Viewer per protocol |
+| **AI agent CLIs in a real terminal** | ● | | | Manual | Manual |
 | **License** | MIT, free | Freemium | Open source | Open source | Often paid |
 | **Cost of “everything in one window”** | One app | Several products or a paid plan | One heavy app | Many extra apps | Many extra apps |
 
@@ -55,46 +61,64 @@ AeroTerm is not trying to replace a full IDE, a cloud team vault, or a commercia
 
 ## What you can do
 
+<table>
+<tr>
+<td width="50%" valign="top">
+
 ### Remote connection
 
-| Tool | Role |
+| | |
 | --- | --- |
 | **SSH** | Color remote terminal. Password or private key, host-key checking, reconnect if the session drops. |
 | **SFTP** | Browse, upload, download, rename, and search over the same secure channel. Drag-and-drop upload with a cancellable progress bar. |
 | **Telnet** | Plain-text console for older servers, lab gear, and switches. |
 
+</td>
+<td width="50%" valign="top">
+
 ### Debugging tools
 
-| Tool | Role |
+| | |
 | --- | --- |
-| **TCP client / server** | Live stream, text or HEX, encodings, timed repeat, file send, optional echo and broadcast. |
+| **TCP** | Client and server. Live stream, text or HEX, encodings, timed repeat, file send, optional echo and broadcast. |
 | **UDP** | Unicast, multicast, or broadcast, with a HEX inspector. |
-| **Serial** | USB-UART and RS-232. **Shell** for a full terminal, or **Tester** for classic send/receive with timestamps and HEX. |
-| **HTTP client** | HTTP, HTTPS, and WebSocket: method, URL, params, headers, body, auth, pretty JSON. |
-| **HTTP server** | A quick local listener that echoes or returns a custom status and body. |
+| **Serial** | USB-UART and RS-232. **Shell** for a full terminal, or **Tester** for classic send/receive. |
+| **HTTP** | Client (HTTP/HTTPS/WebSocket) and a quick local server. |
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 ### Remote desktop
 
-| Tool | Role |
+| | |
 | --- | --- |
 | **VNC** | Graphical desktop with clipboard sync, quality and refresh presets. |
 | **RDP** | Windows workstation or server, with the same display controls and reconnect. |
+
+</td>
+<td width="50%" valign="top">
 
 ### AI & agent CLI
 
 Run a local agent in a real terminal tab, with working directory and optional environment:
 
-Claude Code, Codex, Antigravity, Grok, Hermes, or any custom binary you point at.
+Claude Code · Codex · Antigravity · Grok · Hermes · or any custom binary.
+
+</td>
+</tr>
+</table>
 
 ---
 
 ## Getting started
 
-1. Open `dist/AeroTerm.app`, or AeroTerm from Applications after you install it.
+1. Open `dist/AeroTerm.app`, or install from `dist/AeroTerm-darwin-arm64.dmg` and launch AeroTerm from Applications.
 2. Grant Keychain access when macOS asks.
 3. Create a connection, open the workbench, or click a recent host.
 
-**⌘N** new connection · **⌘,** settings · **⌃⌘S** sidebar · **⇧⌘1** welcome window.
+`⌘N` new connection · `⌘,` settings · `⌃⌘S` sidebar · `⇧⌘1` welcome window
 
 Requires **macOS 15** or later.
 
