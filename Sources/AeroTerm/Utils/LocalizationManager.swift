@@ -35,16 +35,23 @@ public final class LocalizationManager: ObservableObject {
     }
 
     private func savedLanguage() -> AppLanguage {
-        if let raw = UserDefaults.standard.string(forKey: languageDefaultsKey),
-           let language = AppLanguage(rawValue: raw) {
-            return language
-        }
-        return .system
+        Self.language(fromStored: UserDefaults.standard.string(forKey: languageDefaultsKey))
     }
 
     nonisolated private static func resolvedBundle() -> Bundle {
-        let language = AppLanguage(rawValue: UserDefaults.standard.string(forKey: languageDefaultsKey) ?? "") ?? .system
+        let language = language(fromStored: UserDefaults.standard.string(forKey: languageDefaultsKey))
         return bundle(forLproj: language.lprojName)
+    }
+
+    nonisolated private static func language(fromStored raw: String?) -> AppLanguage {
+        switch raw {
+        case "zh-Hans":
+            return .chineseChina
+        case "zh-Hant":
+            return .chineseTaiwan
+        default:
+            return raw.flatMap(AppLanguage.init(rawValue:)) ?? .system
+        }
     }
 
     nonisolated private static func bundle(forLproj name: String) -> Bundle {

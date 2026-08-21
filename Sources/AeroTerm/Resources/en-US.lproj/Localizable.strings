@@ -2,9 +2,11 @@
 
 /* Branding & Welcome */
 "app_title" = "AeroTerm";
-"app_version" = "v1.0-0819";
+"app_version" = "v1.0-0821";
 "language_system" = "System";
 "language_english" = "English";
+"language_chinese_cn" = "中文-中国（zh-cn）";
+"language_chinese_tw" = "中文-台湾（zh-tw）";
 "language_japanese" = "日本語";
 "language_french" = "Français";
 "language_german" = "Deutsch";

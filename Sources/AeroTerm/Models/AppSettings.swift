@@ -6,6 +6,8 @@ import Combine
 public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     case system
     case english = "en-US"
+    case chineseChina = "zh-CN"
+    case chineseTaiwan = "zh-TW"
     case japanese = "ja"
     case french = "fr"
     case german = "de"
@@ -16,6 +18,8 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .system: return "language_system"
         case .english: return "language_english"
+        case .chineseChina: return "language_chinese_cn"
+        case .chineseTaiwan: return "language_chinese_tw"
         case .japanese: return "language_japanese"
         case .french: return "language_french"
         case .german: return "language_german"
@@ -26,6 +30,8 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .system: return Self.systemLprojName()
         case .english: return "en-US"
+        case .chineseChina: return "zh-Hans"
+        case .chineseTaiwan: return "zh-Hant"
         case .japanese: return "ja"
         case .french: return "fr"
         case .german: return "de"
@@ -35,12 +41,22 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     public static func systemLprojName() -> String {
         for identifier in Locale.preferredLanguages {
             let lowered = identifier.lowercased()
+            if Self.isTraditionalChinese(lowered) { return "zh-Hant" }
+            if lowered.hasPrefix("zh") { return "zh-Hans" }
             if lowered.hasPrefix("ja") { return "ja" }
             if lowered.hasPrefix("fr") { return "fr" }
             if lowered.hasPrefix("de") { return "de" }
             if lowered.hasPrefix("en") { return "en-US" }
         }
         return "en-US"
+    }
+
+    private static func isTraditionalChinese(_ identifier: String) -> Bool {
+        identifier.contains("hant")
+            || identifier.contains("-tw")
+            || identifier.hasPrefix("zh-tw")
+            || identifier.contains("-hk")
+            || identifier.contains("-mo")
     }
 }
 
@@ -148,9 +164,16 @@ public final class SettingsManager: ObservableObject {
             self.terminalPaletteID = SerialColorScheme.followAppID
         }
 
-        if let savedLanguage = UserDefaults.standard.string(forKey: languageDefaultsKey),
-           let language = AppLanguage(rawValue: savedLanguage) {
-            self.language = language
+        if let savedLanguage = UserDefaults.standard.string(forKey: languageDefaultsKey) {
+            let migrated: String
+            switch savedLanguage {
+            case "zh-Hans": migrated = AppLanguage.chineseChina.rawValue
+            case "zh-Hant": migrated = AppLanguage.chineseTaiwan.rawValue
+            default: migrated = savedLanguage
+            }
+            if let language = AppLanguage(rawValue: migrated) {
+                self.language = language
+            }
         } else {
             self.language = .system
         }

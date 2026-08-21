@@ -68,6 +68,8 @@ cat << PLIST_EOF > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundleLocalizations</key>
     <array>
         <string>en-US</string>
+        <string>zh-Hans</string>
+        <string>zh-Hant</string>
         <string>ja</string>
         <string>fr</string>
         <string>de</string>
@@ -85,9 +87,9 @@ cat << PLIST_EOF > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0-0819</string>
+    <string>1.0-0821</string>
     <key>CFBundleVersion</key>
-    <string>20260819</string>
+    <string>20260821</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>NSHighResolutionCapable</key>
@@ -109,8 +111,22 @@ codesign --force --deep --sign - "${APP_DIR}"
 
 APP_SIZE=$(du -sh "${APP_DIR}" | awk '{print $1}')
 
+ARCH="$(uname -m)"
+DMG_PATH="${DIST_DIR}/${APP_NAME}-darwin-${ARCH}.dmg"
+echo "💿 正在打包 ${DMG_PATH}..."
+rm -f "${DMG_PATH}"
+hdiutil create \
+    -volname "${APP_NAME}" \
+    -srcfolder "${APP_DIR}" \
+    -ov \
+    -format UDZO \
+    "${DMG_PATH}" >/dev/null
+DMG_SIZE=$(du -sh "${DMG_PATH}" | awk '{print $1}')
+
 echo "=================================================="
 echo "✅ 打包完成"
 echo "📍 ${APP_DIR}"
 echo "📏 ${APP_SIZE}"
+echo "💿 ${DMG_PATH}"
+echo "📏 ${DMG_SIZE}"
 echo "=================================================="

@@ -2,7 +2,7 @@
 
 /* Branding & Welcome */
 "app_title" = "AeroTerm";
-"app_version" = "v1.0-0819";
+"app_version" = "v1.0-0821";
 "app_subtitle" = "軽量なネイティブ SSH / ネットワーク運用ワークベンチ";
 "new_connection_btn" = "新規接続（ウィザード）";
 "recent_connections" = "最近の接続";
@@ -322,6 +322,8 @@
 "language_label" = "アプリの言語";
 "language_system" = "システム";
 "language_english" = "English";
+"language_chinese_cn" = "中文-中国（zh-cn）";
+"language_chinese_tw" = "中文-台湾（zh-tw）";
 "language_japanese" = "日本語";
 "language_french" = "Français";
 "language_german" = "Deutsch";
