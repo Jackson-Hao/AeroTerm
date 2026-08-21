@@ -32,7 +32,8 @@
 "connection_type_label" = "プロトコル";
 "connection_name_required" = "接続名は必須です。";
 "close_session" = "セッションを閉じる";
-"session_duplicate" = "複製";
+"session_duplicate" = "セッションを複製";
+"connection_duplicate" = "接続を複製";
 "session_suspend" = "一時停止";
 "session_resume" = "再開";
 "session_close" = "閉じる";

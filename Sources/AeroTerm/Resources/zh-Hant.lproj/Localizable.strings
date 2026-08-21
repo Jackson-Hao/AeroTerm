@@ -39,7 +39,8 @@
 "connection_type_label" = "協定";
 "connection_name_required" = "請填寫連線名稱。";
 "close_session" = "關閉工作階段";
-"session_duplicate" = "複製";
+"session_duplicate" = "複製工作階段";
+"connection_duplicate" = "複製連線";
 "session_suspend" = "暫停";
 "session_resume" = "繼續";
 "session_close" = "關閉";

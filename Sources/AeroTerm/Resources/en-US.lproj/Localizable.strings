@@ -39,7 +39,8 @@
 "connection_type_label" = "Protocol";
 "connection_name_required" = "Connection name is required.";
 "close_session" = "Close Session";
-"session_duplicate" = "Duplicate";
+"session_duplicate" = "Duplicate Session";
+"connection_duplicate" = "Duplicate Connection";
 "session_suspend" = "Suspend";
 "session_resume" = "Resume";
 "session_close" = "Close";

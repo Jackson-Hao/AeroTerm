@@ -47,11 +47,13 @@ fi
 
 if [ -f "${PROJECT_ROOT}/Assets/AppIcon.icns" ]; then
     cp "${PROJECT_ROOT}/Assets/AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
-else
+elif [ -f "${PROJECT_ROOT}/scripts/generate_icon.swift" ]; then
     echo "⚠️ 未检测到 AppIcon.icns，尝试重新生成..."
     swift "${PROJECT_ROOT}/scripts/generate_icon.swift"
     iconutil -c icns "${PROJECT_ROOT}/Assets/AppIcon.iconset" -o "${PROJECT_ROOT}/Assets/AppIcon.icns"
     cp "${PROJECT_ROOT}/Assets/AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
+else
+    echo "⚠️ 未检测到 AppIcon.icns，打包将没有自定义图标。"
 fi
 
 if [ -f "${PROJECT_ROOT}/Assets/AppIcon_1024.png" ]; then
@@ -130,52 +132,6 @@ trap cleanup_dmg EXIT
 ditto "${APP_DIR}" "${STAGE}/${APP_NAME}.app"
 ln -s /Applications "${STAGE}/Applications"
 
-mkdir -p "${STAGE}/.background"
-python3 - "${STAGE}/.background/background.png" <<'PY'
-import struct, sys, zlib
-from pathlib import Path
-
-path = Path(sys.argv[1])
-w, h = 1440, 800
-
-def pixel(x, y):
-    # Navy grid matching the app icon
-    gx = 11 + (3 if (x // 8) % 2 == (y // 8) % 2 else 0)
-    gy = 18 + (4 if (x // 8) % 2 == (y // 8) % 2 else 0)
-    gz = 36 + (6 if (x // 8) % 2 == (y // 8) % 2 else 0)
-    r, g, b = gx, gy, gz
-    # Soft cyan chevron pointing toward Applications
-    cx, cy = w * 0.5, h * 0.52
-    dx, dy = x - cx, y - cy
-    # Two bars of a ">"
-    def near_line(x0, y0, x1, y1, thick):
-        vx, vy = x1 - x0, y1 - y0
-        llen = (vx * vx + vy * vy) ** 0.5 or 1
-        t = max(0.0, min(1.0, ((x - x0) * vx + (y - y0) * vy) / (llen * llen)))
-        px, py = x0 + t * vx, y0 + t * vy
-        return (x - px) ** 2 + (y - py) ** 2 <= thick * thick
-    if near_line(cx - 36, cy - 48, cx + 44, cy, 7) or near_line(cx + 44, cy, cx - 36, cy + 48, 7):
-        r, g, b = 40, 210, 235
-    return r, g, b, 255
-
-raw = bytearray()
-for y in range(h):
-    raw.append(0)
-    for x in range(w):
-        raw.extend(pixel(x, y))
-
-def chunk(tag: bytes, data: bytes) -> bytes:
-    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-
-ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
-path.write_bytes(
-    b"\x89PNG\r\n\x1a\n"
-    + chunk(b"IHDR", ihdr)
-    + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
-    + chunk(b"IEND", b"")
-)
-PY
-
 rm -f "${RW_DMG}"
 hdiutil create \
     -volname "${APP_NAME}" \
@@ -198,8 +154,6 @@ if [ -z "${DMG_MOUNT}" ] || [ ! -d "${DMG_MOUNT}" ]; then
     exit 1
 fi
 
-chflags hidden "${DMG_MOUNT}/.background" || true
-
 osascript <<APPLESCRIPT >/dev/null
 tell application "Finder"
     tell disk "${APP_NAME}"
@@ -211,7 +165,6 @@ tell application "Finder"
         set theViewOptions to icon view options of container window
         set arrangement of theViewOptions to not arranged
         set icon size of theViewOptions to 128
-        set background picture of theViewOptions to file ".background:background.png"
         delay 0.4
         set position of item "${APP_NAME}.app" of container window to {160, 205}
         set position of item "Applications" of container window to {500, 205}

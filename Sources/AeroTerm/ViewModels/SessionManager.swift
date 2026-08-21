@@ -201,7 +201,7 @@ public final class SessionManager: ObservableObject {
                 accountID: aid,
                 desktop: matched?.desktop ?? desktop
             )
-            return beginRemoteConnect(config, saveOnSuccess: false)
+            return beginRemoteConnect(config, saveOnSuccess: false, forceNew: forceNew)
         }
 
         if type == .serial {
@@ -402,7 +402,8 @@ public final class SessionManager: ObservableObject {
     public func beginRemoteConnect(
         _ config: ConnectionConfig,
         saveOnSuccess: Bool = false,
-        replacingSessionID: UUID? = nil
+        replacingSessionID: UUID? = nil,
+        forceNew: Bool = false
     ) -> Bool {
         if let hud = connectionHUD, !hud.isFinished {
             return false
@@ -426,7 +427,7 @@ public final class SessionManager: ObservableObject {
             }
         }
 
-        if replacingSessionID == nil,
+        if !forceNew, replacingSessionID == nil,
            let existing = existingSession(
             type: config.type,
             host: config.host,
@@ -456,7 +457,8 @@ public final class SessionManager: ObservableObject {
         }
         let hud = ConnectionHUDState(title: title, subtitle: target)
         connectionHUD = hud
-        let replaceID = replacingSessionID
+        let replaceID: UUID? = forceNew ? replacingSessionID : (
+            replacingSessionID
             ?? existingSession(
                 type: resolved.type,
                 host: resolved.host,
@@ -465,6 +467,7 @@ public final class SessionManager: ObservableObject {
                 accountID: resolved.accountID
             )?.id
             ?? disconnectedSessionID(matching: resolved)
+        )
         switch config.type {
         case .telnet:
             connectTask = Task { await runTelnetConnectPipeline(config: resolved, account: account, hud: hud, saveOnSuccess: saveOnSuccess, replacingSessionID: replaceID) }
@@ -1009,12 +1012,13 @@ public final class SessionManager: ObservableObject {
     public func duplicateSession(_ session: SessionItem) {
         let title = Self.baseSessionTitle(session.title)
         if session.type == .agentCLI {
-            openAgentCLI(
+            _ = openAgentCLI(
                 title: title,
                 command: session.host,
                 arguments: session.customCommand,
                 workingDirectory: session.workingDirectory ?? session.targetDevice,
-                environment: session.environmentVariables
+                environment: session.environmentVariables,
+                forceNew: true
             )
             return
         }
@@ -1037,6 +1041,59 @@ public final class SessionManager: ObservableObject {
             serial: session.serial,
             desktop: session.desktop
         )
+    }
+
+    /// Clone a saved connection as a new editable favorite. Does not connect.
+    @discardableResult
+    public func duplicateSavedConnection(_ config: ConnectionConfig) -> ConnectionConfig {
+        var copy = config
+        copy.id = UUID()
+        copy.name = uniqueConnectionName(config.name)
+        saveConnection(copy, connectImmediately: false)
+        sidebarTab = .saved
+        return copy
+    }
+
+    /// Copy an open session into a new saved connection (same settings, new identity).
+    @discardableResult
+    public func duplicateSessionAsConnection(_ session: SessionItem) -> ConnectionConfig {
+        duplicateSavedConnection(connectionConfig(from: session))
+    }
+
+    private func connectionConfig(from session: SessionItem) -> ConnectionConfig {
+        if let connectionID = session.connectionID,
+           let saved = savedConnections.first(where: { $0.id == connectionID }) {
+            return saved
+        }
+        return ConnectionConfig(
+            name: Self.baseSessionTitle(session.title),
+            type: session.type,
+            host: session.host,
+            port: session.port,
+            localPort: session.localPort,
+            udpMode: session.udpMode,
+            username: session.customCommand ?? "",
+            accountID: session.accountID,
+            customArgs: session.type == .agentCLI ? session.customCommand : nil,
+            workingDirectory: session.workingDirectory ?? session.targetDevice,
+            envVars: session.environmentVariables,
+            label: session.label,
+            serial: session.serial,
+            desktop: session.desktop
+        )
+    }
+
+    private func uniqueConnectionName(_ base: String) -> String {
+        let trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        let root = Self.baseSessionTitle(trimmed.isEmpty ? "Session" : trimmed)
+        if !savedConnections.contains(where: { $0.name == root }) {
+            return root
+        }
+        var index = 2
+        while savedConnections.contains(where: { $0.name == "\(root) (\(index))" }) {
+            index += 1
+        }
+        return "\(root) (\(index))"
     }
 
     public func setSessionSuspended(id: UUID, _ suspended: Bool) {
@@ -1291,14 +1348,16 @@ public final class SessionManager: ObservableObject {
         command: String,
         arguments: String?,
         workingDirectory: String?,
-        environment: [String: String]?
+        environment: [String: String]?,
+        forceNew: Bool = false
     ) -> UUID {
-        if let existing = sessions.first(where: {
+        if !forceNew,
+           let existing = sessions.first(where: {
             $0.type == .agentCLI
                 && $0.host == command
                 && $0.customCommand == arguments
                 && ($0.workingDirectory ?? $0.targetDevice) == workingDirectory
-        }) {
+           }) {
             selectSession(existing.id)
             return existing.id
         }

@@ -26,3 +26,7 @@ dist/
 *.app
 *.dmg
 *.zip
+
+# Local icon / logo generators
+scripts/generate_*.swift
+scripts/generate_*.sh

@@ -84,6 +84,11 @@ public struct SidebarView: View {
         return "\(session.host):\(String(session.port))"
     }
 
+    private func presentConnectionEditor(_ connectionID: UUID) {
+        editingConnectionID = connectionID
+        isShowingConnectionManager = true
+    }
+
     private func localPortLine(_ port: Int) -> String {
         if port > 0 {
             return String(format: loc.text("tcp_local_line"), String(port))
@@ -225,6 +230,11 @@ public struct SidebarView: View {
                 editingConnectionID = config.id
                 isShowingConnectionManager = true
             }
+            Button {
+                presentConnectionEditor(sessionManager.duplicateSavedConnection(config).id)
+            } label: {
+                Label(loc.text("connection_duplicate"), systemImage: "plus.square.on.square")
+            }
             Divider()
             Button(loc.text("delete_config"), role: .destructive) {
                 sessionManager.requestDeleteConnection(id: config.id)
@@ -347,6 +357,12 @@ public struct SidebarView: View {
                 sessionManager.duplicateSession(session)
             } label: {
                 Label(loc.text("session_duplicate"), systemImage: "plus.square.on.square")
+            }
+
+            Button {
+                presentConnectionEditor(sessionManager.duplicateSessionAsConnection(session).id)
+            } label: {
+                Label(loc.text("connection_duplicate"), systemImage: "square.on.square")
             }
 
             Button {

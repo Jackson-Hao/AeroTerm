@@ -32,7 +32,8 @@
 "connection_type_label" = "Protocole";
 "connection_name_required" = "Le nom de la connexion est obligatoire.";
 "close_session" = "Fermer la session";
-"session_duplicate" = "Dupliquer";
+"session_duplicate" = "Dupliquer la session";
+"connection_duplicate" = "Dupliquer la connexion";
 "session_suspend" = "Suspendre";
 "session_resume" = "Reprendre";
 "session_close" = "Fermer";

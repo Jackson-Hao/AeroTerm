@@ -32,7 +32,8 @@
 "connection_type_label" = "Protokoll";
 "connection_name_required" = "Ein Verbindungsname ist erforderlich.";
 "close_session" = "Sitzung schließen";
-"session_duplicate" = "Duplizieren";
+"session_duplicate" = "Sitzung duplizieren";
+"connection_duplicate" = "Verbindung duplizieren";
 "session_suspend" = "Anhalten";
 "session_resume" = "Fortsetzen";
 "session_close" = "Schließen";

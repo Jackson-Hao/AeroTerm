@@ -39,7 +39,8 @@
 "connection_type_label" = "协议";
 "connection_name_required" = "请填写连接名称。";
 "close_session" = "关闭会话";
-"session_duplicate" = "复制";
+"session_duplicate" = "复制会话";
+"connection_duplicate" = "复制连接";
 "session_suspend" = "挂起";
 "session_resume" = "恢复";
 "session_close" = "关闭";

@@ -62,6 +62,19 @@ public struct ConnectionManagerView: View {
                     .font(.system(size: 12, weight: .semibold))
                 Spacer()
                 Button {
+                    if let selectedID,
+                       let config = sessionManager.savedConnections.first(where: { $0.id == selectedID }) {
+                        let copy = sessionManager.duplicateSavedConnection(config)
+                        self.selectedID = copy.id
+                        editorToken = UUID()
+                    }
+                } label: {
+                    Image(systemName: "plus.square.on.square")
+                }
+                .buttonStyle(.borderless)
+                .disabled(selectedID == nil)
+                .help(loc.text("connection_duplicate"))
+                Button {
                     if let selectedID {
                         sessionManager.requestDeleteConnection(id: selectedID)
                     }
@@ -106,6 +119,18 @@ public struct ConnectionManagerView: View {
                         }
                         .tag(Optional(config.id))
                         .padding(.vertical, 2)
+                        .contextMenu {
+                            Button {
+                                let copy = sessionManager.duplicateSavedConnection(config)
+                                selectedID = copy.id
+                                editorToken = UUID()
+                            } label: {
+                                Label(loc.text("connection_duplicate"), systemImage: "plus.square.on.square")
+                            }
+                            Button(loc.text("delete_config"), role: .destructive) {
+                                sessionManager.requestDeleteConnection(id: config.id)
+                            }
+                        }
                     }
                 }
                 .listStyle(.sidebar)
